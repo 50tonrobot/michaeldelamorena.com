@@ -1,0 +1,68 @@
+---
+title: "Migrating From Splunk to an Open Observability Stack"
+description: "The real costs of Splunk at scale, the migration decision framework, and what the operational reality looks like on the other side."
+date: "2025-10-15"
+tags: ["observability", "splunk", "prometheus", "grafana", "elasticsearch", "kubernetes"]
+featured: true
+draft: false
+---
+
+The Splunk migration decision is one that most organizations with growing observability requirements eventually face. The licensing cost is the forcing function that usually initiates the conversation, but the real reasons to migrate — and the real risks — are more nuanced than the bill alone.
+
+## The Real Cost of Splunk at Scale
+
+Splunk's licensing model is based on daily ingest volume. At small scale, it is manageable. As log volume grows — particularly in Kubernetes environments where every container is producing stdout, every sidecar is logging, and log verbosity tends to increase with system complexity — the bill grows faster than the business.
+
+But license cost is only part of the total cost of ownership. Splunk's query language, SPL, is proprietary. Expertise in it does not transfer to other systems. Teams build significant institutional knowledge in SPL-based dashboards and saved searches that represent a migration liability. Every engineer who knows only SPL is an engineer who cannot operate the alternative stack without retraining.
+
+There is also a concentration risk. When all telemetry flows through a single vendor's system, the platform team's leverage in that relationship is limited. Pricing renegotiation happens at renewal time, not continuously. The cost of switching grows every year that more institutional knowledge accumulates in the proprietary system.
+
+## The Migration Decision Framework
+
+The decision to migrate should not be made on license cost alone. The relevant questions are:
+
+Does the alternative stack provide equivalent capability for the workflows your teams actually use? If your security team relies on Splunk's correlation rules and SIEM capabilities, "equivalent capability" for them is a high bar. If your teams are primarily using Splunk as a log search tool, the bar is lower.
+
+What is the migration liability? The dashboards, saved searches, and alerting rules built in Splunk need to be rebuilt in the new stack. Estimating this accurately requires an audit of what actually exists and what is actively used — unused dashboards do not need to be migrated.
+
+What is the operational overhead of the new stack? Splunk is operationally managed by Splunk. Elasticsearch, Prometheus, and Grafana are operationally managed by your team. That is a real cost that belongs in the total cost comparison.
+
+## Stack Selection
+
+**Fluent Bit** over Logstash for log collection. The decision was resource footprint. Fluent Bit is a C-based binary with minimal memory overhead, designed specifically for Kubernetes DaemonSet deployment. Logstash is JVM-based and consumes an order of magnitude more memory per node for equivalent throughput. At the node densities involved — dozens of nodes across multiple clusters — this difference is significant. Fluent Bit's configuration model is more constrained than Logstash's, but it handles parsing, filtering, transformation, and multi-destination routing sufficiently for the primary log pipeline use case.
+
+**Elasticsearch** over Loki for log storage. Loki is purpose-built for log streams and integrates naturally with Grafana. Its trade-off is query flexibility: Loki indexes labels, not field values, which means ad-hoc field-level queries require scanning the raw log stream. This is acceptable for known, structured log patterns. It is frustrating during incident investigation when you do not know in advance which field contains the relevant signal and need to iterate through hypotheses quickly. Elasticsearch's inverted index makes arbitrary field queries efficient, at the cost of higher storage overhead and operational complexity.
+
+**Prometheus** for metrics. There is no serious alternative for Kubernetes-native metrics collection at this point in the ecosystem. The scrape model, the exposition format, the PromQL query language, and the Kubernetes operator (kube-prometheus-stack) are the standard. The decision was configuration and retention, not whether to use it.
+
+**Grafana** as the unified dashboard layer. Grafana datasource plugins for both Elasticsearch and Prometheus mean teams see one UI regardless of whether they are investigating logs or querying metrics. The dashboard-as-code model (Grafana's JSON dashboard definitions, managed in Git) was important: dashboards that exist only in a Grafana instance's database are a maintenance liability.
+
+## Running Stacks in Parallel
+
+The most important operational decision in the migration was to run both stacks simultaneously for three months before switching any alerting from Splunk to the new stack.
+
+The parallel period revealed three categories of issues that would have caused incidents if the switch had been made earlier:
+
+Alert coverage gaps: a number of Splunk alerts covered system behaviors that we had not yet replicated in PromQL or Elasticsearch alerting rules. The gaps were not obvious until we attempted a side-by-side comparison of alert inventories.
+
+Log parsing discrepancies: some application log formats were parsed differently by Fluent Bit than by Splunk's extractors, producing different field structures in Elasticsearch than teams expected from their Splunk experience.
+
+Dashboard parity problems: several Splunk dashboards used SPL features — statistical functions, transaction commands — that had no direct PromQL or Elasticsearch equivalent. Those required redesign rather than translation.
+
+Cutting Splunk before the new stack had been proven under real incident conditions is a risk that is difficult to recover from. The parallel period costs money — you are running both systems — but it is an investment in a migration that actually works rather than one that creates an incident.
+
+## Alerting Rule Migration
+
+This was harder than anticipated. Dashboard migration is largely mechanical: a Splunk dashboard panel can be reimplemented in Grafana by understanding what it was measuring and writing the equivalent query. Alerting rule migration requires understanding the intent of each alert, which is often not documented.
+
+Alerts accumulate institutional knowledge. A Splunk alert firing on a specific SPL pattern often encodes years of experience about what that pattern means for that specific system. Translating the SPL to PromQL without understanding the intent produces alerts that fire at the wrong threshold or on the wrong condition.
+
+The approach that worked: for every significant alert, have a conversation with the team that owned it before attempting migration. Understand what the alert was detecting, what the expected response was, and whether the threshold was correct or just historical. Several alerts were deprecated during this process — they had been created for conditions that no longer existed.
+
+## Post-Migration
+
+After completing the migration, Splunk licensing cost was eliminated. The replacement infrastructure runs on existing cluster capacity at a cost that is significantly lower.
+
+Teams that had previously required Splunk Power User licenses to run queries are now self-service through Grafana. Onboarding a new service requires setting the correct labels on the deployment — Fluent Bit and Prometheus discover it automatically.
+
+The ongoing operational overhead of Elasticsearch cluster management is real. Index lifecycle management, shard allocation, and capacity planning require attention that Splunk-as-a-service did not. That is the trade-off: lower cost and more flexibility, in exchange for more operational responsibility. For a team with the platform engineering capacity to manage it, the trade-off is favorable.

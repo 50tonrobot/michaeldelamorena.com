@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# ─── Load GA Measurement ID from .env.local ─────────────────────────────────
+ENV_FILE="$PROJECT_ROOT/.env.local"
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "Error: .env.local not found at $PROJECT_ROOT/.env.local"
+  exit 1
+fi
+GA_ID=$(grep '^NEXT_PUBLIC_GA_MEASUREMENT_ID=' "$ENV_FILE" | cut -d'=' -f2- | tr -d '"' | tr -d "'")
+if [[ -z "$GA_ID" ]]; then
+  echo "Error: NEXT_PUBLIC_GA_MEASUREMENT_ID not found in .env.local"
+  exit 1
+fi
+
+# ─── Registry credentials (from ~/.zshrc: REGISTRY_DOMAIN, REGISTRY_USERNAME, REGISTRY_PASSWORD) ─
+: "${REGISTRY_DOMAIN:?REGISTRY_DOMAIN is not set. Source ~/.zshrc or export it.}"
+: "${REGISTRY_USERNAME:?REGISTRY_USERNAME is not set.}"
+: "${REGISTRY_PASSWORD:?REGISTRY_PASSWORD is not set.}"
+
+IMAGE_NAME="${REGISTRY_DOMAIN}/michaeldelamorena-com"
+
+# ─── Derive next patch version from latest git tag ──────────────────────────
+cd "$PROJECT_ROOT"
+LATEST_TAG=$(git tag --list 'v*' --sort=-version:refname | head -1)
+if [[ -z "$LATEST_TAG" ]]; then
+  LATEST_TAG="v0.0.0"
+fi
+
+IFS='.' read -r MAJOR MINOR PATCH <<< "${LATEST_TAG#v}"
+PATCH=$((PATCH + 1))
+NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+NEW_TAG="v${NEW_VERSION}"
+
+echo "──────────────────────────────────────────"
+echo " michaeldelamorena.com deploy"
+echo " Version : $NEW_TAG"
+echo " Image   : ${IMAGE_NAME}:${NEW_VERSION}"
+echo "──────────────────────────────────────────"
+
+# ─── Login to registry ───────────────────────────────────────────────────────
+echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_DOMAIN" \
+  --username "$REGISTRY_USERNAME" \
+  --password-stdin
+
+# ─── Build for linux/arm64 ───────────────────────────────────────────────────
+echo "Building image for linux/arm64..."
+docker build \
+  --platform linux/arm64 \
+  --build-arg "NEXT_PUBLIC_GA_MEASUREMENT_ID=${GA_ID}" \
+  -t "${IMAGE_NAME}:${NEW_VERSION}" \
+  -t "${IMAGE_NAME}:latest" \
+  "$PROJECT_ROOT"
+
+# ─── Push ────────────────────────────────────────────────────────────────────
+echo "Pushing ${IMAGE_NAME}:${NEW_VERSION}..."
+docker push "${IMAGE_NAME}:${NEW_VERSION}"
+docker push "${IMAGE_NAME}:latest"
+
+# ─── Git tag ─────────────────────────────────────────────────────────────────
+git tag "$NEW_TAG"
+echo "Created git tag $NEW_TAG"
+
+# ─── Ensure registry pull secret exists in release namespace ─────────────────
+NAMESPACE="michaeldelamorena-com"
+if ! kubectl get secret my-registry-secret -n "$NAMESPACE" &>/dev/null; then
+  echo "Copying my-registry-secret to namespace $NAMESPACE..."
+  kubectl get secret my-registry-secret -n default -o json | \
+    jq 'del(.metadata.namespace,.metadata.resourceVersion,.metadata.uid,.metadata.creationTimestamp,.metadata.annotations,.metadata.managedFields) | .metadata.namespace="'"$NAMESPACE"'"' | \
+    kubectl apply -f -
+fi
+
+# ─── Helm deploy ─────────────────────────────────────────────────────────────
+echo "Deploying to k3s via Helm..."
+helm upgrade --install michaeldelamorena-com \
+  "$PROJECT_ROOT/helm/michaeldelamorena-com" \
+  --namespace michaeldelamorena-com \
+  --create-namespace \
+  --set "image.tag=${NEW_VERSION}" \
+  --set "image.repository=${IMAGE_NAME}" \
+  --wait \
+  --timeout 120s
+
+echo ""
+echo "Deployed ${IMAGE_NAME}:${NEW_VERSION} to k3s"
+echo "Tagged $NEW_TAG"
+echo ""
+echo "  Site: https://michaeldelamorena.com"

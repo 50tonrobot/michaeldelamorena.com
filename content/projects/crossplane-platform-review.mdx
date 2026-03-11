@@ -1,0 +1,65 @@
+---
+title: "Crossplane Internal Developer Platform"
+description: "Building a self-service infrastructure platform using Crossplane to replace ticket-driven provisioning across AWS and GCP at enterprise scale."
+date: "2026-03-01"
+tags: ["kubernetes", "crossplane", "platform-engineering", "aws", "gcp", "idp"]
+featured: false
+order: 5
+draft: false
+---
+
+Infrastructure provisioning through a ticketing system is a predictable bottleneck. Engineers wait days for environments. Platform teams spend their time running tickets instead of improving the platform. This project replaced that workflow with a GitOps-based self-service model using Crossplane, eliminating the queue and enforcing governance standards programmatically rather than by policy document.
+
+## Context
+
+The scope covered cluster provisioning on AWS (EKS) and GCP (GKE) — both ephemeral development clusters and longer-lived staging and production environments. The fleet reached 40+ clusters. At that scale, manual provisioning is not just slow; it is a source of configuration drift. Clusters built from memory or from slightly different Terraform module versions accumulate differences that are invisible until they cause an incident.
+
+## Problem
+
+The ticket-driven model had two failure modes. Speed: a standard cluster request took 2-5 business days to fulfill through the queue. Consistency: clusters built at different points in time by different engineers had subtle variations in node sizing, networking configuration, IAM boundaries, and add-on versions. Drift was not intentional — it was the natural outcome of manual processes applied inconsistently over time.
+
+## Architecture
+
+Crossplane runs in a dedicated management cluster. Clusters that need provisioned infrastructure make requests through Kubernetes custom resources — they do not need direct access to cloud provider APIs. The management cluster holds the cloud provider credentials; workload clusters only interact with Crossplane's Kubernetes API.
+
+Composite Resource Definitions (XRDs) define the abstractions exposed to development teams. Rather than exposing raw AWS or GCP provider resources, XRDs define purpose-built abstractions: a `DevelopmentCluster` with sensible defaults and constrained options, a `StagingEnvironment` with networking that mirrors production, a `ProductionCluster` with stricter node sizing and mandatory add-ons.
+
+Compositions implement these abstractions. A single `DevelopmentCluster` request expands into a VPC, subnets, security groups, IAM roles, an EKS cluster, managed node groups, and a set of bootstrap add-ons. All of this is configured consistently from a single composition definition — the team requesting the cluster does not see or manage any of those underlying resources directly.
+
+GitOps integration means cluster requests are pull requests. A developer creates a YAML file declaring the resource they need, submits a PR, and after review, merging the PR triggers Crossplane to provision the infrastructure. The PR history is the provisioning audit trail.
+
+## Governance Model
+
+The composition layer is where organizational standards live. Node sizes are defined as enum options in the XRD — teams choose from approved sizes, not arbitrary values. Networking follows the organization's VPC and subnet conventions by construction, not by documentation. IAM policies are applied automatically; teams cannot opt out. Add-ons required for security and observability (admission controllers, log collectors, metrics exporters) are provisioned as part of every cluster composition, not as optional extras.
+
+This approach shifts compliance from audit to architecture. Standards cannot be bypassed through ignorance or shortcuts because there is no manual step where they might be skipped. The composition enforces them structurally.
+
+## Operational Experience at Scale
+
+Managing 40+ clusters under Crossplane revealed several operational realities.
+
+Upgrade coordination is complex. When a provider version updates — the AWS provider, the GCP provider — managed resources may need reconciliation. Crossplane's reconciliation loop will detect drift between the desired state (the composite resource) and the actual state (the cloud resource), but provider version changes can alter the drift detection behavior. Coordinated provider upgrades require testing in a non-production management cluster first.
+
+Drift detection works, but slowly. Crossplane reconciles on a polling interval, not on real-time change notification. Infrastructure changes made outside Crossplane — through the AWS console or a manual API call — will be detected and corrected, but not immediately. The interval is configurable; shorter intervals increase API call volume against cloud provider rate limits.
+
+Composition errors are difficult to debug. When a composition fails mid-way through provisioning a complex set of dependent resources, the error state can be difficult to interpret. The Crossplane object graph — managed resources, composite resources, claims — requires familiarity to navigate. The `kubectl describe` output on composed resources is the primary debugging surface, and it requires understanding which managed resource corresponds to which cloud resource.
+
+## Crossplane vs Terraform
+
+The two tools solve the same problem with different trade-offs.
+
+Terraform's state model and ecosystem maturity are significant advantages. The provider library is exhaustive, community modules are available for most patterns, and the plan/apply workflow gives operators a preview before changes are applied. Terraform is familiar to a broader population of engineers.
+
+Crossplane's advantages emerge at the developer experience layer. A Kubernetes-native API means infrastructure requests integrate naturally into GitOps workflows that teams already use for application deployments. The continuous reconciliation loop means Crossplane actively corrects drift rather than relying on periodic `terraform apply` runs. For platforms where self-service and drift prevention are primary goals, Crossplane's model fits better.
+
+The practical answer: Crossplane for self-service developer-facing abstractions (cluster provisioning, environment creation); Terraform for complex cloud infrastructure that does not map well to the Kubernetes resource model (large VPC topologies, multi-account OU structures, shared services). They are not mutually exclusive.
+
+## Lessons Learned
+
+XRD design is the hardest part of the work. Getting the abstraction right — exposing enough flexibility for teams to do what they need, constraining enough to enforce standards — requires iteration. Starting with too many options creates governance gaps. Starting with too few creates a different kind of ticket queue: requests for composition changes instead of requests for infrastructure.
+
+Start simple. The initial composition should provision a working cluster with required standards enforced. Every optional capability is a future composition complexity. Add options only when the absence of an option is a real blocker for a real team.
+
+Invest in composition debugging tooling early. When compositions break, engineers need to understand the failure quickly. Building runbooks and familiarity with the Crossplane object model before incidents occur saves significant time during them.
+
+The platform team's work shifts from provisioning to composition maintenance. That is the correct trade-off — teams that were running infrastructure tickets are now writing reusable infrastructure abstractions. But it requires a different skill profile and a different relationship with cloud provider APIs than traditional infrastructure operations.

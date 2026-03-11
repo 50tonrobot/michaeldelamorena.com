@@ -1,0 +1,66 @@
+replicaCount: 2
+
+image:
+  repository: registry.example.internal/michaeldelamorena-com
+  tag: "1.0.0"
+  pullPolicy: Always
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Registry pull secret — must exist in the release namespace.
+# Created by: kubectl get secret my-registry-secret -n default -o json | \
+#   jq 'del(.metadata.namespace,.metadata.resourceVersion,.metadata.uid,.metadata.creationTimestamp,.metadata.annotations,.metadata.managedFields) | .metadata.namespace="michaeldelamorena-com"' | kubectl apply -f -
+imagePullSecrets:
+  - name: my-registry-secret
+
+service:
+  type: ClusterIP
+  port: 3000
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    # ModSecurity WAF (default namespace) + per-app security headers (michaeldelamorena-com namespace)
+    # WAF middleware is shared at the cluster level; security headers are app-specific.
+    # Middleware reference format: <namespace>-<name>@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: "default-modsecurity-michaeldelamorena-com@kubernetescrd,michaeldelamorena-com-michaeldelamorena-com-security-headers@kubernetescrd"
+  hosts:
+    - host: michaeldelamorena.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: michaeldelamorena-com-tls
+      hosts:
+        - michaeldelamorena.com
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+livenessProbe:
+  httpGet:
+    path: /
+    port: 3000
+  initialDelaySeconds: 15
+  periodSeconds: 30
+
+readinessProbe:
+  httpGet:
+    path: /
+    port: 3000
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

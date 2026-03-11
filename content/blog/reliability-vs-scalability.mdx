@@ -1,0 +1,28 @@
+---
+title: "Reliability vs Scalability: Why Engineers Confuse Them"
+description: "Reliability and scalability are related but distinct properties. Confusing them leads to the wrong architectural decisions at the wrong time."
+date: "2026-03-09"
+tags: ["reliability", "scalability", "sre", "architecture"]
+featured: true
+draft: false
+---
+
+Reliability and scalability are two of the most commonly conflated properties in distributed systems design. Engineers reach for horizontal scaling when they have a reliability problem, or obsess over fault tolerance when their real challenge is throughput.
+
+## What Reliability Actually Means
+
+Reliability is the probability that a system will perform its intended function without failure over a specified period. It is a property of correctness and availability — the system does what it is supposed to do, when it is supposed to do it.
+
+## What Scalability Actually Means
+
+Scalability is the ability of a system to handle increased load while maintaining acceptable performance. It is a property of capacity.
+
+## Why They Get Confused
+
+Both problems can manifest as the same symptom: the system stops working correctly under load. An overloaded system that becomes unavailable looks like a reliability failure, but the root cause is a capacity problem.
+
+The solutions are different. Reliability problems require redundancy, circuit breakers, and graceful degradation. Scalability problems require horizontal scaling, caching, and load distribution.
+
+## The Architectural Implication
+
+Design for reliability first. A system that fails gracefully at capacity is more trustworthy than one that scales but fails unpredictably. Once reliability properties are established through SLOs and error budgets, then optimize for scalability.

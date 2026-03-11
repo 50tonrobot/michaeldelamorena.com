@@ -1,0 +1,66 @@
+---
+title: "GenAI Resume Alignment Tool"
+description: "A Python CLI tool that uses Claude and MongoDB to score and improve resume alignment against specific job descriptions."
+date: "2026-03-01"
+tags: ["ai", "llm", "python", "mongodb", "claude"]
+featured: true
+order: 2
+draft: false
+---
+
+Tailoring a resume for each job posting is tedious work that most engineers do poorly under time pressure. The instinct is to copy-paste and tweak. The result is a resume that is mostly relevant — but not specifically relevant — and that loses against candidates who aligned their language to the role's exact vocabulary.
+
+This project automates the alignment scoring and rewrite suggestion process using Claude as the evaluation engine, MongoDB as the document store, and a Python CLI as the interface.
+
+## Problem
+
+Job descriptions are unstructured documents with varying formats and vocabulary. A backend role at one company is called "Platform Engineer" at another and "Infrastructure Engineer" at a third, with largely overlapping responsibilities but completely different keyword sets. Applicant tracking systems screen for keyword presence, and hiring managers quickly pattern-match to their mental model of a role.
+
+Manually reviewing a resume against a job description for keyword alignment, gap identification, and section-by-section scoring is a 30-60 minute task per application. Doing it rigorously across multiple applications is not sustainable.
+
+## Architecture
+
+The tool is structured as a Python CLI with three primary responsibilities: ingestion, evaluation, and output.
+
+**Ingestion** accepts a job description (pasted or file path) and a resume version (markdown or plain text). Both are stored in MongoDB with metadata — company name, role title, ingestion timestamp, and a generated slug. MongoDB was chosen because job descriptions and resume versions are naturally document-shaped with no fixed schema across employers. A relational schema would require either a wide nullable table or a key-value overflow pattern; MongoDB's flexible document model handles arbitrary structure without ceremony.
+
+**Evaluation** sends both documents to the Claude API using a structured prompt that instructs the model to return a JSON response. The prompt specifies the scoring rubric explicitly: score each of four sections (summary, experience, skills, keywords) on a 0-100 scale, identify keywords present in the job description but absent from the resume, and suggest specific rewrites for the top two highest-impact gaps. The response is validated against a Pydantic schema before storage.
+
+**Output** renders the evaluation results to the terminal in a formatted table and writes the full JSON response back to MongoDB linked to the source documents by their ObjectIds. This enables historical comparison — running the same job description against multiple resume iterations and tracking whether scores improve.
+
+## LLM Prompt Design
+
+The initial approach used a conversational prompt asking Claude to "review this resume against this job description." The outputs were inconsistent: sometimes narrative, sometimes structured, sometimes hallucinating keyword matches that existed in neither document.
+
+The prompt was redesigned around two principles: explicit output schema specification and role framing.
+
+The system prompt defines Claude's role as a technical recruiter evaluating alignment for ATS screening and human review. The user prompt contains the job description and resume in delimited sections, followed by an explicit JSON schema that the response must conform to. Example output is included (few-shot) to anchor the format.
+
+This reduced format inconsistency significantly. Providing the expected JSON structure inline — including field names, types, and example values — produces far more reliable structured output than asking for JSON without a template.
+
+## Evaluation Logic
+
+Scores are broken into four sections weighted by typical hiring emphasis:
+
+- **Summary alignment** (20%): does the professional summary reflect the role's core requirements?
+- **Experience alignment** (40%): do the bullet points demonstrate the skills and scope the role requires?
+- **Skills section** (20%): are the required technologies and tools present and positioned correctly?
+- **Keyword coverage** (20%): what percentage of the job description's non-generic technical keywords appear in the resume?
+
+An overall alignment score is computed as the weighted average. Scores below 70 generate rewrite suggestions; scores above 85 suggest the resume is well-positioned and recommends no structural changes.
+
+## Limitations Encountered
+
+**LLM inconsistency across runs.** The same resume and job description, evaluated twice, sometimes produce scores that differ by 5-10 points for the same section. This is a property of LLM sampling temperature. Setting temperature to 0 reduces variance but does not eliminate it entirely for long-context evaluations.
+
+**Prompt sensitivity.** Small changes to phrasing in the system prompt produce measurable differences in scoring behavior. The model interprets "technical recruiter" differently than "senior hiring manager," and those interpretations shift how it weights certain signals.
+
+**Hallucinated keyword matches.** In early prompt iterations, the model occasionally reported that a keyword was present in the resume when it was not. The fix was to explicitly instruct the model to only report matches it can quote verbatim from the resume text, and to mark any inference as "implied" rather than "matched."
+
+## Lessons Learned
+
+Prompt structure matters more than prompt length. A short, precisely structured prompt with an explicit output schema outperforms a long narrative prompt without one. The model does not need extensive explanation of what alignment means — it needs a clear contract for what the output must look like.
+
+Few-shot examples are the highest-leverage optimization available. Adding two example input-output pairs to the prompt reduced format errors by roughly 80% and hallucination of keyword matches by more than half. The cost in tokens is modest relative to the reliability gain.
+
+The system is not a replacement for judgment. Scores are signals, not decisions. A resume that scores 78 might be a better fit than one that scores 91 if the lower-scoring version better reflects genuine depth in the areas that matter most for the role.

@@ -1,0 +1,74 @@
+---
+title: "Designing Safe AI Automation for Infrastructure"
+description: "The difference between AI-assisted and AI-automated operations is more than a spectrum — it is a trust model. Getting it right requires deliberate architecture."
+date: "2025-07-01"
+tags: ["ai", "infrastructure", "security", "platform-engineering", "sre"]
+featured: false
+draft: false
+---
+
+Every infrastructure team eventually considers the same question: can we automate more of the operational work using AI? The answer is yes, with significant caveats. The caveats are not theoretical — they are architectural requirements that determine whether AI automation is a force multiplier or a source of production incidents.
+
+## AI-Assisted vs AI-Automated: The Trust Model Difference
+
+AI-assisted infrastructure operations means a human remains in the decision loop. The model surfaces information, suggests actions, or drafts responses — and a human decides what to do. The trust model is simple: the human is accountable for the outcome, and the AI is a tool that helps the human work faster or with more context.
+
+AI-automated infrastructure operations means the model's decisions trigger actions without human review. The trust model is more complex: now the AI's judgment is in the execution chain, and the consequences of wrong judgments are real system changes. This is a different category of system, with different safety requirements.
+
+The line between them is not always obvious in practice. An AI that "suggests" an action but defaults to executing it in 30 seconds unless the human intervenes is effectively automated, not assisted. The trust model follows from actual system behavior, not from how the product is described.
+
+## Minimum Necessary Privilege for AI Agents
+
+The principle of least privilege applies to AI agents at least as strongly as it applies to human operators. More so, in some respects, because the blast radius of a wrong decision by an AI agent running at machine speed can be larger than what a human operator would cause in the same time.
+
+An agent that answers questions about system state needs read access. It does not need write access. An agent that escalates incidents by paging on-call needs access to the alerting system. It does not need access to the production database. An agent that generates infrastructure recommendations needs access to metrics and logs. It does not need to be able to apply those recommendations.
+
+The temptation when building AI infrastructure tooling is to grant broad permissions to make the agent more useful. The correct approach is to start with the minimum permissions required for the specific use case, verify those permissions are sufficient, and resist adding more until there is a concrete reason. Permissions are easy to add and difficult to audit after the fact.
+
+## The Human-in-the-Loop Spectrum
+
+There is a useful mental model for categorizing the level of human involvement in AI-driven actions:
+
+**Always human**: the AI surfaces information and recommendations, but every action requires explicit human approval. Appropriate for high-blast-radius operations: production deployments, scaling events, configuration changes that affect availability.
+
+**Human for exceptions**: the AI executes routine actions autonomously, but flags anomalous situations for human review before proceeding. Appropriate for well-defined operational patterns with clear success criteria and low blast radius per action.
+
+**Fully autonomous**: the AI executes all actions within its scope without human review. Only appropriate for actions that are reversible, have minimal blast radius, and have been proven reliable in human-supervised mode first.
+
+Most production-safe AI automation lives in the first two categories, not the third. Moving an action from "human for exceptions" to "fully autonomous" requires demonstrated reliability over a meaningful number of executions, clearly defined scope boundaries, and a rollback mechanism for cases where the AI's judgment turns out to be wrong.
+
+## Designing for Graceful Degradation
+
+AI-automated systems fail in ways that manual systems do not. A model can be confidently wrong — producing incorrect output without any uncertainty signal. A model can behave differently when the input distribution shifts from what it was trained or tested on. A model's behavior can be subtly different across versions of the same model.
+
+Systems that depend on AI for operational decisions need to degrade gracefully when the AI component fails or produces unexpected output. This means:
+
+A fallback path that does not require the AI to function: if the model is unavailable or produces output that fails validation, the system should fall back to a safe state, not to an error that blocks operations.
+
+Output validation independent of the model: any AI output that triggers action should be validated for structural correctness, authorization, and reasonableness before execution. The validation logic should be simple, deterministic code — not another model.
+
+Defined scope boundaries with hard enforcement: the AI should not be able to request actions outside its defined scope, regardless of what its output contains. The enforcement mechanism is code, not prompt engineering.
+
+## Audit Logging for AI-Driven Actions
+
+In a manual operations model, the human who makes a change is accountable. They can be questioned, they have context, and their decision can be reviewed. In an AI-automated model, the accountability chain is less clear unless it is made explicit.
+
+Every action taken by an AI agent should be logged with: the input that triggered the action, the full model output before any transformation, the specific action taken, the validation steps that approved the action, and a correlation ID that links back to the originating event. This is not optional — it is the mechanism that makes post-incident investigation possible and that provides the data required to improve the system's behavior over time.
+
+Without complete audit logs, AI automation is operating without accountability. When it makes a wrong decision — not if — you will not have the information to understand why or to prevent it from happening again.
+
+## Starting With Read-Only
+
+The most reliable path to production-safe AI automation is to start with read-only agents and earn write access through demonstrated reliability.
+
+A read-only agent that answers questions about system state, summarizes recent incidents, correlates metrics with deployment events, or generates recommendations for human review provides substantial value with zero blast radius. Operating one of these systems for a few months builds confidence in the model's behavior, surfaces edge cases, and establishes the baseline reliability that justifies expanding scope.
+
+Write access should be added incrementally, for specific low-blast-radius actions first. Automated ticket routing before automated configuration changes. Automated notification before automated remediation. Automated dry-run reporting before automated apply.
+
+## What Production-Safe AI Automation Actually Looks Like
+
+It looks significantly more constrained than the demos suggest. The agent has narrow scope, minimal permissions, complete audit logging, output validation before every action, and human review for anything above a low blast-radius threshold. The scope expands over time as reliability is demonstrated, not upfront because the use case sounds compelling.
+
+The organizations I have seen try to shortcut this — granting broad permissions early, skipping output validation, relying on prompt engineering as a security control — have production incidents that were entirely predictable in retrospect. The controls are not bureaucratic overhead; they are the engineering work that makes the system safe to operate.
+
+AI automation that is safe to run in production is AI automation that has been built as if it will eventually be wrong, and designed so that being wrong does not cause an incident.

@@ -1,0 +1,59 @@
+---
+title: "Observability Platform Migration"
+description: "Migrating from Splunk to an open-source observability stack — Fluent Bit, Elasticsearch, Prometheus, and Grafana — at enterprise scale."
+date: "2026-03-01"
+tags: ["observability", "kubernetes", "prometheus", "grafana", "elasticsearch", "sre"]
+featured: true
+order: 3
+draft: false
+---
+
+At a certain scale, Splunk's licensing model becomes a significant budget line. The per-gigabyte ingest pricing, combined with retention requirements and the growth rate of log volume from Kubernetes workloads, makes the cost trajectory predictable and steep. This project replaced Splunk with a purpose-built open-source stack without sacrificing the observability capabilities that teams depended on.
+
+## Problem
+
+The cost problem was the forcing function, but it exposed a secondary problem: Splunk had become a monolith for all telemetry. Logs, metrics, and alerting were routed through a single system with a proprietary query language. Teams that wanted custom dashboards submitted tickets. Onboarding new applications meant configuring Splunk forwarders through a managed process. The platform was reliable but not self-service.
+
+The migration goal was twofold: eliminate Splunk licensing cost and give engineering teams direct access to their own telemetry through composable, open tooling.
+
+## Migration Path
+
+The stack selection was driven by operational requirements, not by adopting whatever was popular at the time.
+
+**Fluent Bit** replaced Splunk Universal Forwarder for log collection. The primary driver was resource footprint. Fluent Bit runs as a DaemonSet on each Kubernetes node. At the cluster densities involved, Logstash's JVM overhead was not acceptable — it consumed 10-15x the memory of Fluent Bit per node for equivalent throughput. Fluent Bit's plugin model handles filtering, transformation, and multi-destination routing without requiring a separate aggregator tier for most use cases.
+
+**Elasticsearch** was chosen over Loki for log storage and search. Loki's label-based indexing model is efficient for high-cardinality log streams but constrains query flexibility — full-text search across arbitrary fields requires a LogQL query against the raw stream. Elasticsearch's inverted index allows ad-hoc queries across any field, which is what teams actually need during incident investigation when they do not know in advance which field contains the signal.
+
+**Prometheus** handles metrics collection with standard scrape-based collection for Kubernetes components and application endpoints via ServiceMonitor resources. Alerting rules are defined in Prometheus and routed through Alertmanager to PagerDuty and Slack.
+
+**Grafana** serves as the unified dashboard layer, connecting to both Elasticsearch (via the Elasticsearch datasource) and Prometheus. A single pane of glass for logs and metrics with no Splunk-proprietary dependencies.
+
+## Telemetry Pipeline Design
+
+Log flow: application containers write to stdout/stderr, the Kubernetes runtime captures them to node-local files, Fluent Bit reads those files via its Tail input plugin, applies parsing and enrichment (adding pod name, namespace, deployment labels), and ships to Elasticsearch over HTTPS. Sensitive field redaction happens at the Fluent Bit filter stage before data leaves the node.
+
+Metrics flow: applications expose a `/metrics` endpoint in Prometheus exposition format. Prometheus scrapes endpoints defined by ServiceMonitor custom resources. Recording rules pre-aggregate expensive queries into time series stored as new metrics, reducing dashboard query latency.
+
+Trace flow was handled separately via OpenTelemetry collectors. Traces were not part of the initial Splunk replacement scope — they were greenfield, not migration.
+
+## Dashboard Design Principles
+
+The four golden signals — latency, traffic, errors, and saturation — anchored every initial dashboard. Each service got a standard dashboard template with these four panels before any service-specific panels were added. This created consistency: engineers moving between service dashboards could orient quickly because the structure was identical.
+
+Service-specific panels were added on request or during postmortem review when an incident surfaced a signal that was not visible in the standard template. This kept dashboards dense with useful information rather than filled with panels nobody reads.
+
+## Operational Improvements
+
+Incident response time improved. Before migration, log queries during incidents required either a Splunk Power User license or waiting for someone with access. After migration, every engineer with Grafana access could run their own queries directly.
+
+Self-service onboarding dropped from a multi-day ticket workflow to a Helm chart value: setting the correct labels on a Deployment caused Fluent Bit to pick up the logs and Prometheus to discover the metrics endpoint automatically.
+
+Splunk licensing cost was eliminated entirely after the migration completed. The infrastructure cost of running Elasticsearch, Prometheus, and Grafana on existing cluster capacity was significantly lower.
+
+## Lessons Learned
+
+Run both stacks in parallel until confidence is established. Cutting Splunk before the new stack has been proven under incident conditions is a risk that is difficult to recover from. The parallel period revealed gaps in alerting coverage that were hidden by Splunk alerts that had never been ported.
+
+Alerting rules are harder to migrate than dashboards. Splunk alerts often encode institutional knowledge about what threshold matters for a specific system. That knowledge is not in the alert definition — it is in the head of the person who wrote it. Every alert migration required a conversation with the owning team to understand intent before translating to PromQL.
+
+Elasticsearch operational overhead is real. Index lifecycle management, shard sizing, and cluster scaling require attention. Loki would have lower operational overhead at the cost of query flexibility. For teams with strong log-based investigation workflows, the trade-off favors Elasticsearch. For teams primarily doing metrics-based alerting who occasionally need logs for context, Loki is worth reconsidering.

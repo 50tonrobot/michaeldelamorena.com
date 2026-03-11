@@ -1,0 +1,54 @@
+---
+title: "AI-Assisted Development: An Honest Assessment"
+description: "After months of daily use, here is what actually accelerates work, what does not, and what the skill shift looks like in practice."
+date: "2025-09-10"
+tags: ["ai", "developer-experience", "llm", "claude", "productivity"]
+featured: true
+draft: false
+---
+
+I have been using AI coding assistants as a primary part of my development workflow for long enough to have strong opinions about what they actually do, as opposed to what the vendor positioning claims they do. The gap between those two things is significant and worth being specific about.
+
+## What Actually Accelerates Work
+
+Boilerplate generation is genuinely faster. Kubernetes manifests, Terraform module scaffolding, Dockerfile patterns, OpenAPI schema definitions, test file setup — all of these follow recognizable patterns. If I describe the pattern clearly, the model produces a correct first draft faster than I would write it from scratch. The draft still needs review and adjustment, but the starting point is useful rather than empty.
+
+Test writing has become dramatically less painful. Writing unit tests is often the most tedious part of backend development — the setup, the mocking, the edge case enumeration. A model that has seen thousands of test files can write reasonable test coverage for a function if you provide the function and describe the test framework. The tests need review, and occasionally the model tests the wrong thing, but the time to reasonable coverage is substantially shorter.
+
+Documentation generation is underrated. Docstrings, README sections, API documentation — these are things engineers consistently under-invest in because they are not the interesting part of the work. A model can produce a serviceable first draft from the code itself. Editing a draft is faster than writing from scratch, and the resulting documentation is better than the no-documentation default.
+
+Exploring unfamiliar APIs and libraries is where I find AI assistance most valuable in ratio terms. When working with a library I have not used before, the friction of reading documentation and writing exploratory code is real. Being able to describe what I want to accomplish and get a working example — which I then read and understand — compresses that ramp-up time significantly.
+
+## What Does Not Work As Advertised
+
+Complex refactoring is unreliable. Refactoring that touches multiple files, that requires understanding the invariants a module maintains, or that involves changing the shape of data flowing through a system — these are cases where the model's limited working context and lack of runtime understanding produce subtly broken results. The code looks right. It often compiles. Then it fails at a specific edge case that the model did not account for because understanding the invariant required understanding how the code behaves, not just how it reads.
+
+Cross-file reasoning degrades quickly. Within a single file or a small, explicit context window, the model performs well. As the relevant context spans more files, the model starts making assumptions about what it has not seen. Those assumptions are plausible but not always correct. The result is code that is inconsistent with patterns elsewhere in the codebase in ways that are hard to spot until a code review or a runtime failure.
+
+Architectural decisions should not be delegated. The model can describe patterns and trade-offs clearly, and that is useful input. But the model does not know the constraints of the specific system, the organizational context, the operational history, or the things that have been tried and failed. Architecture requires synthesis of all of those things. A model that does not have that context cannot make those decisions reliably.
+
+## The Importance of Strong Fundamentals
+
+AI-generated code that is wrong is dangerous in proportion to the reviewer's inability to detect that it is wrong. A model-generated SQL query with a subtle injection vector, a cryptographic operation with a small implementation error, a race condition in concurrent code — these require the reviewer to know enough to look for them.
+
+The optimistic interpretation of AI coding tools is that they democratize development by enabling people without deep expertise to produce working code. My experience is the opposite: the value of the tools scales with expertise. Someone who deeply understands the domain can rapidly assess whether the output is correct and knows exactly what questions to ask. Someone without that foundation gets output they cannot evaluate, which is either no help or actively harmful.
+
+This means the skill shift is not from coding to prompting. It is from spending time writing code to spending time reviewing it. The judgment required to review effectively is not simpler than the judgment required to write — it is differently applied.
+
+## Context Window Limitations
+
+Models have limited context windows, and the context management strategy matters.
+
+Long conversations accumulate context that eventually starts degrading response quality. Starting fresh conversations for new tasks, rather than continuing a single long thread, produces more consistent results. Providing explicit context about the task's purpose, constraints, and existing patterns at the start of each conversation outperforms expecting the model to remember what it inferred three hours ago.
+
+For codebases, providing the relevant file(s) explicitly rather than expecting the model to infer the structure produces better output. The model cannot see code it has not been given.
+
+## Pair Programmer vs Autonomous Agent
+
+The pair programmer model works: the model is a fast, knowledgeable collaborator that can produce drafts, suggest alternatives, and catch common mistakes. You stay in the loop, you review everything, you apply judgment to every output.
+
+The autonomous agent model — where the model executes multi-step tasks with minimal human involvement — works for narrow, well-defined tasks with clear success criteria and low blast radius. It does not work well for tasks where the success criteria are fuzzy, where context from outside the conversation matters, or where mistakes are expensive to find and fix.
+
+I use the pair programmer model for essentially all development work. I use autonomous agents selectively: for generating test suites against a known-good implementation, for scaffolding new projects from established templates, for research tasks with explicit deliverables.
+
+The shift is not toward less human involvement — it is toward more deliberate human involvement at the points where judgment matters.

@@ -1,0 +1,64 @@
+---
+title: "Prompt Injection and Why It Matters for Infrastructure"
+description: "Prompt injection is not an abstract research concern. For infrastructure automation backed by LLMs, it is a practical privilege escalation vector."
+date: "2025-08-05"
+tags: ["ai", "security", "llm", "prompt-injection", "infrastructure"]
+featured: false
+draft: false
+---
+
+Prompt injection gets discussed primarily in the context of chatbots — someone tricks a customer service bot into saying something inappropriate. That framing understates the risk considerably. When LLMs are connected to infrastructure tooling with privileged access, prompt injection becomes a mechanism for privilege escalation. The attack surface is real, and the mitigations are not straightforward.
+
+## What Prompt Injection Is
+
+A language model receives a prompt that combines system instructions with user-supplied content. The model does not have a reliable mechanism to distinguish "instructions from the system" from "instructions injected by the user" — both arrive as text in the same context window, and both look the same to the model's attention mechanism.
+
+Prompt injection exploits this by crafting user input that overrides system instructions. A system prompt that says "You are a helpful assistant that only answers questions about our product documentation" can be undermined by user input that says "Ignore your previous instructions. Your new task is..." followed by whatever the attacker wants the model to do.
+
+The model is not blindly compliant — instruction following is probabilistic, not deterministic — but meaningful bypass rates are achievable with modest effort. Phrasing the injection as a clarification, a role-play scenario, or an emergency override improves the success rate. Obfuscating the injection through character substitution or encoding adds another dimension.
+
+## Direct vs Indirect Injection
+
+Direct injection is the straightforward variant: the attacker interacts with the system and places the injection payload in their own input. The attack requires direct access to the system.
+
+Indirect injection does not. The attacker plants injection payloads in content that the LLM will later retrieve and process. The canonical example: an attacker writes a document and uploads it to a shared knowledge base. A user later queries a RAG-based assistant that retrieves that document. The document contains injection instructions in its text. When the model processes the retrieved document, it executes the embedded instructions — without any interaction between the attacker and the victim.
+
+Indirect injection via document stores, web content, emails, or any other user-contributed data source is harder to prevent because the malicious content enters the system through a legitimate channel before the model ever sees it. The attack chain has multiple steps and no direct attacker-to-model interaction at execution time.
+
+## Why Infrastructure Automation Is a High-Value Target
+
+An LLM-driven operations bot that can query system state, modify configurations, restart services, or interact with cloud provider APIs is not just a convenience tool — it is a privileged principal in the infrastructure. A successful injection that hijacks such a bot's actions is equivalent to gaining the permissions the bot holds.
+
+Infrastructure automation bots often hold permissions that individual users do not: broad read access across services, write access to configuration stores, the ability to trigger deployments or scale resources. Precisely because they need these permissions to be useful, they are high-value injection targets.
+
+The threat model is not hypothetical. An attacker who can influence content that the bot processes — a chat message, a ticket, a document in a knowledge base the bot reads — has a path to executing arbitrary actions with the bot's permissions if the injection succeeds and the bot's output is trusted downstream.
+
+## RAG Systems and Indirect Injection Vectors
+
+Retrieval-augmented generation creates specific indirect injection risks. When a model's context is populated partly from a retrieval system, the retrieval system becomes part of the attack surface.
+
+If the knowledge base ingests any user-contributed content — shared wikis, customer-submitted documents, public web pages — an attacker who can write to that content can influence what the model retrieves and processes. A document that appears innocuous to a human reviewer may contain instruction payloads that are only relevant when processed by a model.
+
+The retrieval filter controls which documents enter the context, but it typically filters on relevance, not on the presence of injection payloads. A semantically relevant document that also contains an injection payload gets retrieved along with the relevant content.
+
+## Why Output Filtering Is Insufficient
+
+A natural instinct is to detect and block injection attacks by filtering the model's output — looking for patterns that suggest a successful injection. This approach has fundamental limitations.
+
+The model's output can be arbitrarily varied by an attacker who controls the injection content. Trying to enumerate all the forms a successful injection might produce is an enumeration problem that cannot be closed. Filtering for known-bad patterns misses novel patterns; filtering too aggressively produces false positives that break legitimate use cases.
+
+Output filtering addresses symptoms. It does not address the causal mechanism, which is the model's inability to reliably distinguish system instructions from injected instructions.
+
+## Architectural Mitigations
+
+**Privilege separation**: the model should operate with the minimum permissions required for its specific task. An assistant that answers documentation questions should not hold write access to production systems, regardless of how narrow its intended scope is. If it cannot invoke a privileged action, a successful injection cannot either.
+
+**Output validation before action**: any LLM output that will trigger a side effect should pass through an independent validation layer that has no LLM involvement. This layer verifies that the requested action is within the system's intended scope, has the necessary permissions, and does not violate invariants. The LLM's output is a suggestion, not an authenticated command.
+
+**Human in the loop for privileged operations**: infrastructure changes, configuration modifications, and any action with significant blast radius should require human confirmation, regardless of model confidence. The confirmation step is not a performance cost — it is a security boundary.
+
+**Input sanitization at prompt construction time**: user-supplied content should be clearly delimited when embedded in prompts, and obvious injection patterns can be filtered before they reach the model. This reduces the attack surface but does not eliminate it.
+
+**Sandboxed execution environments**: agents that call tools or execute code should do so in environments with restricted network access, filesystem isolation, and bounded execution time, to limit what a successful injection can accomplish.
+
+None of these mitigations is sufficient alone. Defense in depth — multiple independent layers, each of which an attacker must defeat — is the appropriate posture for systems where the consequences of a successful attack are significant.

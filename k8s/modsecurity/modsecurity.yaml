@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modsecurity-michaeldelamorena-com
+  namespace: default
+  labels:
+    app: modsecurity-michaeldelamorena-com
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: modsecurity-michaeldelamorena-com
+  template:
+    metadata:
+      labels:
+        app: modsecurity-michaeldelamorena-com
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+      - name: modsecurity
+        image: owasp/modsecurity-crs:nginx
+        command:
+          - sh
+          - -c
+          - mkdir -p /tmp/proxy_temp /tmp/client_temp /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp && nginx -g 'daemon off;'
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 300m
+            memory: 256Mi
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          allowPrivilegeEscalation: false
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        - name: modsec-main
+          mountPath: /etc/nginx/modsec/main.conf
+          subPath: main.conf
+        - name: modsec-conf
+          mountPath: /etc/nginx/modsec/modsecurity.conf
+          subPath: modsecurity.conf
+        - name: modsecurity-logs
+          mountPath: /var/log/modsecurity
+        - name: nginx-logs
+          mountPath: /var/log/nginx
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: modsecurity-michaeldelamorena-com-config
+      - name: modsec-main
+        configMap:
+          name: modsecurity-michaeldelamorena-com-config
+      - name: modsec-conf
+        configMap:
+          name: modsecurity-michaeldelamorena-com-config
+      - name: modsecurity-logs
+        emptyDir: {}
+      - name: nginx-logs
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: modsecurity-michaeldelamorena-com
+  namespace: default
+  labels:
+    app: modsecurity-michaeldelamorena-com
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: modsecurity-michaeldelamorena-com

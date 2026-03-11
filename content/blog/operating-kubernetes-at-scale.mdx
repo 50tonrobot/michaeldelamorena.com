@@ -1,0 +1,68 @@
+---
+title: "Operating Kubernetes at Scale"
+description: "The difference between running a Kubernetes cluster and operating a fleet of them is not just quantity. It is a different class of problem."
+date: "2026-01-15"
+tags: ["kubernetes", "platform-engineering", "sre", "operations"]
+featured: false
+draft: false
+---
+
+Running a Kubernetes cluster is something you can learn in a weekend. Operating a fleet of them at enterprise scale is a distinct discipline. The problems change in kind, not just in degree. Version management, drift detection, multi-tenancy isolation, cost attribution, and policy enforcement all become fleet-level concerns with fleet-level failure modes.
+
+## The Cluster Upgrade Problem
+
+A single cluster upgrade is a procedural event. At 40+ clusters, it becomes an inventory and coordination problem.
+
+Kubernetes releases three minor versions per year and end-of-lifes versions on a 14-month support window. At 40 clusters, you may have clusters spread across three minor versions at any given time, each on different patch versions. Tracking which clusters are on which version, which are approaching EOL, and which need priority upgrades requires tooling — not a spreadsheet, but actual inventory management with alerting.
+
+Control plane upgrades and node pool upgrades are distinct operations with distinct failure modes. An EKS control plane upgrade that succeeds does not guarantee the data plane is compatible. Version skew between control plane and nodes is bounded by the Kubernetes compatibility rules, but those bounds are easy to violate when clusters are not upgraded in sequence.
+
+The operational stance I have found most effective: treat minor version upgrades as planned work on a rolling 6-month cycle rather than reactive events triggered by EOL notices. Clusters that are always one minor version behind the latest have the most buffer time and the most stable upgrade paths.
+
+## Drift and Configuration Consistency
+
+Drift is the divergence between how a cluster was intended to be configured and how it actually is configured. In a fleet, it is never zero.
+
+The sources of drift are predictable: manual emergency interventions that never get reverted, one-off changes made to unblock an incident, add-ons installed directly rather than through the cluster provisioning pipeline, configuration changes applied to one environment that never make it to others.
+
+Detection requires comparison tooling. GitOps models with continuous reconciliation (ArgoCD, Flux) reduce drift in the resources they manage, but they cannot manage everything. Cluster-level configuration — admission controller policies, network policies, RBAC definitions for platform components — requires separate drift detection, typically through policy scanning tools or custom controllers.
+
+The harder challenge is deciding what to do about detected drift. Not all drift is wrong. Some clusters have intentional deviations documented as exceptions. Distinguishing intentional from unintentional drift requires metadata — a record of why the deviation was made and whether it is permanent or temporary.
+
+## Multi-Tenancy Approaches
+
+Kubernetes multi-tenancy exists on a spectrum, and the right point on that spectrum depends on the isolation requirements and the team's operational capacity.
+
+Namespace-based tenancy is the lightest approach. Teams get one or more namespaces on a shared cluster with RBAC, NetworkPolicies, and ResourceQuotas enforcing boundaries. It is cost-efficient and operationally simple from a fleet perspective. The trade-offs are real: a misbehaving namespace can affect neighbors through noisy neighbor resource contention, and blast radius is limited but not eliminated. Namespace tenancy works well for teams with similar trust levels and workloads.
+
+Separate clusters per team or per environment provide the strongest isolation. Blast radius is bounded to the cluster. There is no noisy neighbor issue in the data plane. The cost is fleet size — more clusters means more upgrade work, more monitoring, more control plane cost. This model makes sense for production workloads and for teams with significantly different security requirements.
+
+Virtual clusters (tools like vCluster) sit between these options: lightweight Kubernetes API servers running as workloads within a host cluster, with full Kubernetes API surface but shared underlying nodes. They provide stronger isolation than namespaces without the operational overhead of full clusters. They are worth evaluating for ephemeral development environments.
+
+## Admission Controllers and Policy Enforcement
+
+Admission controllers are the control plane enforcement layer. They intercept API requests before they are persisted and can mutate or reject them based on policy.
+
+At fleet scale, policies need to be applied consistently across clusters. A security requirement applied to 39 out of 40 clusters is not a security requirement — it is a checklist item with one unchecked box. Policy distribution and drift detection for admission controller configurations is a fleet-level concern.
+
+The practical approach: define policies in a centralized policy repository, apply them to all clusters through the provisioning pipeline, and verify policy presence through a compliance scanning job that runs against every cluster on a regular cadence.
+
+Mutating admission controllers are particularly useful for enforcing standards without burdening application teams. Injecting resource limits, adding required labels, or mounting standard sidecars via mutation reduces the surface area where teams can accidentally violate requirements.
+
+## Cost Visibility in Shared Clusters
+
+Namespace-based tenancy makes cost attribution difficult because cloud billing is at the cluster level, not the namespace level. A cluster shared by ten teams produces one cloud bill.
+
+Chargeback in shared clusters requires tooling to allocate actual resource consumption — CPU, memory, network egress, storage — to the consuming namespace. Tools like Kubecost and OpenCost provide this by scraping Kubernetes metrics and correlating them with cloud pricing APIs.
+
+Without cost visibility, shared clusters create a tragedy of the commons: teams over-provision because they do not see the cost, and the platform team cannot make data-driven decisions about cluster sizing or tenancy model.
+
+## The Hidden Costs of Cluster Sprawl
+
+Cluster sprawl — the accumulation of more clusters than you intended, managed with less rigor than you planned — is the predictable outcome of manual provisioning without strong lifecycle management.
+
+Every cluster that exists is a cluster that needs upgrades, security patching, monitoring, and eventual decommissioning. The lifecycle management cost is not optional — it is just often unpaid until it accumulates into a crisis.
+
+The mitigation is to make cluster creation self-service and audited, and cluster deletion straightforward and expected. Clusters should have owners, documented purpose, and a defined lifecycle. Clusters that do not have active owners should be decommissioned on a schedule, not left running indefinitely because nobody wants to be the one to turn them off.
+
+Operating Kubernetes at scale is fundamentally a governance problem. The technical implementation — Kubernetes itself — is mature and well-documented. What takes longer to develop is the operational discipline to keep a fleet coherent, auditable, and cost-visible over time.

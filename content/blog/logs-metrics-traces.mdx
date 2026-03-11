@@ -1,0 +1,50 @@
+---
+title: "Logs, Metrics, and Traces: Using the Right Tool"
+description: "The three pillars of observability serve different purposes. Using logs where you need metrics, or metrics where you need traces, produces systems that are hard to debug and expensive to operate."
+date: "2025-11-20"
+tags: ["observability", "sre", "prometheus", "elasticsearch", "distributed-systems"]
+featured: false
+draft: false
+---
+
+The "three pillars of observability" framing — logs, metrics, traces — gets repeated often enough that it has started to feel like received wisdom without much attached reasoning. The problem is that knowing the three pillars exist is not the same as knowing when each one is the right tool. Misapplying them produces telemetry systems that are expensive, slow, or both — and that still fail to give you the information you need during an incident.
+
+## Logs: For Forensics, Not Alerting
+
+Logs are event records. Every log entry documents that something happened at a specific time, with specific context. Their strength is richness and specificity — a log line can contain arbitrary structured fields, full request context, stack traces, and correlation identifiers. Their weakness is that they are expensive to store, expensive to query at scale, and not designed for aggregation.
+
+The right use case for logs is forensic investigation: you know something went wrong, you have a time window and a service name, and you need to understand exactly what happened. Logs tell you the story of individual events.
+
+Using logs as an alerting mechanism is a common mistake. Log-based alerts require parsing, aggregating, and pattern-matching over a stream of text or structured records in near-real-time. The tooling exists, but it is significantly more expensive and higher-latency than metric-based alerting. An error rate alert based on counting log lines with `level: error` will fire later, cost more, and require more infrastructure than the equivalent Prometheus counter-based alert.
+
+Structured logging is the prerequisite for logs being useful at all. Unstructured log lines — free-form text with embedded data — require parsing at query time, which is slow and fragile. Log lines that are JSON objects with consistent field names can be indexed and queried efficiently. This is not an optional enhancement; it is the difference between logs that are investigable and logs that are just storage cost.
+
+## Metrics: For Alerting, Not Debugging
+
+Metrics are numerical measurements sampled or accumulated over time. A counter of HTTP requests, a gauge of active connections, a histogram of request durations — these are metrics. Their strength is efficiency: they aggregate many events into compact time series that can be retained for months and queried in milliseconds. Their weakness is that they discard the event-level detail that makes forensic investigation possible.
+
+The right use case for metrics is detection and alerting: "is this service behaving correctly right now, and am I about to miss my SLO?" Metrics tell you the aggregate state of a system at high temporal resolution.
+
+Using metrics as a debugging tool is frustrating. A spike in the error rate counter tells you that errors are happening. It does not tell you which specific requests are failing, what the error messages are, or which downstream service is returning errors. That requires logs. Metrics identify that a problem exists; logs and traces explain what the problem is.
+
+High cardinality in metrics is an operational risk that is easy to create accidentally and expensive to undo. Adding a request ID as a metric label — something that seems reasonable when you are thinking like a log engineer — creates a unique time series for every request, which can exhaust metric storage in hours. Labels on metrics should have bounded cardinality: HTTP method, status code, service name, route — not request IDs, user IDs, or any value drawn from unbounded sets.
+
+## Traces: For Latency Attribution
+
+Traces are records of causally connected operations: the work that happened, in what order, across what services, over what duration, to fulfill a single request. Each span in a trace represents a unit of work — a database query, an RPC call, a cache lookup — with start time, duration, and contextual metadata.
+
+The right use case for traces is latency attribution in distributed systems. When a user-facing request is slow, traces answer the question: which component added the most latency, and why? A 3-second response that consists of a 200ms application layer and a 2.8-second database query is only attributable correctly when you have a trace that shows the causal relationship between the request and the query.
+
+Traces are not availability signals. A trace that shows a request failing does not tell you the failure rate — it tells you that this specific request failed. For availability questions, use metrics. For "why is it slow?" questions, use traces.
+
+Distributed trace propagation requires instrumentation throughout the call graph. Traces are only as complete as the services that participate in them. A trace that stops at a service boundary because the downstream service does not propagate the trace context is a partial trace — useful, but incomplete. This makes distributed tracing an adoption problem as much as a technical problem.
+
+## What a Mature Observability Stack Looks Like
+
+The starting point is the four golden signals, articulated in the Google SRE book: latency, traffic, errors, and saturation. These four metrics, properly instrumented, can detect the overwhelming majority of production incidents. They belong in metrics — Prometheus counters and histograms — not in logs or traces.
+
+From that base, logs provide the investigation capability: when a golden signal alert fires, logs enable root cause analysis. Structured logs with consistent fields, retained for a useful time window (days to weeks depending on volume), searchable by service and time range.
+
+Traces are added last, for services where latency attribution matters. Not every service needs distributed tracing. Services with complex downstream dependency graphs, or services subject to latency SLOs that require attribution to fulfill, are the right candidates.
+
+The mistake I see repeatedly is teams building expensive log aggregation infrastructure and treating log volume as an observability success metric, while running no meaningful metric-based alerting. They are very good at investigating incidents. They are not good at detecting them before users report them. Observability maturity is about detection speed and investigation speed together — the right tools for each.

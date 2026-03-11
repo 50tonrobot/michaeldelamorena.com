@@ -1,0 +1,60 @@
+---
+title: "Platform Engineering Is Not Just DevOps With a Better Name"
+description: "Platform engineering and DevOps share roots but solve different problems. The distinction matters for how you structure teams and what you measure."
+date: "2026-02-05"
+tags: ["platform-engineering", "devops", "kubernetes", "developer-experience"]
+featured: false
+draft: false
+---
+
+The terms get used interchangeably in job postings and conference talks. Platform engineering is sometimes described as "DevOps matured," or "DevOps at scale," as if it were simply DevOps with more engineers or a fancier title. That framing misses the meaningful difference between the two, and getting it wrong leads to organizational structures that fail at exactly the problems they were built to solve.
+
+## Where DevOps Came From
+
+DevOps emerged as a reaction to the wall between development and operations teams. In the pre-DevOps model, developers wrote software and threw it over a wall. Operations teams ran it, often with minimal understanding of its internals. The model produced slow deployments, brittle systems, and blame-shifting during incidents.
+
+The DevOps answer was cultural and organizational: break down the wall. Give development teams ownership of their services in production. "You build it, you run it" became the organizing principle. The idea was sound — teams that feel operational pain have stronger incentives to write reliable software.
+
+## Where DevOps Falls Short
+
+"You build it, you run it" works when teams have the tools, platforms, and knowledge to run things well. When they do not, the model does not produce operational excellence — it produces burned-out engineers who spend their time rebuilding the same infrastructure plumbing in slightly different ways across dozens of teams.
+
+At the scale of a hundred teams, every team independently managing their own CI/CD pipelines, Kubernetes manifests, monitoring configurations, and alerting rules is not autonomy — it is accidental complexity. The organization collectively pays for that complexity in duplicated effort, inconsistent practices, security gaps, and cognitive load.
+
+The platform team is a response to that failure mode. Not to take ownership back from development teams, but to build the platform that makes ownership practical.
+
+## The Core Distinction
+
+DevOps is a philosophy about who owns the software lifecycle. Platform engineering is about building the product that makes that ownership tractable at scale.
+
+A platform team builds things for other engineers. Their users are internal. Their product is the developer experience: the CLI that deploys a service, the Helm chart that enforces security defaults, the dashboard that surfaces a team's error budget, the golden path that gets a new service from idea to production in a day instead of a week.
+
+This product orientation is the key distinction. A DevOps culture says "teams should own their operations." Platform engineering says "here is a product that makes owning your operations possible without rebuilding everything from scratch."
+
+## Team Topologies and Stream-Aligned Teams
+
+Skelton and Pais's Team Topologies framework provides useful vocabulary. Stream-aligned teams do the primary value-delivery work — they build and run the product. Platform teams reduce cognitive load for stream-aligned teams by providing self-service capabilities with acceptable abstractions.
+
+The critical word is "acceptable." An abstraction is not helpful if it forces teams into a workflow that does not match their actual needs, or if it is so opinionated that teams route around it. Platform teams earn adoption through genuine value — faster time to production, reduced operational overhead, security compliance that does not require engineers to think about it separately.
+
+Adoption is not optional in this framing. Internal tools that are not adopted are not a platform. They are shelfware with a team behind them.
+
+## Kubernetes as Platform Substrate
+
+Kubernetes has become the practical foundation for most internal developer platforms, not because it is simple — it is not — but because it provides the right abstraction layer. Custom Resource Definitions allow platform teams to expose purpose-built APIs to application teams without exposing the underlying complexity. An application team can deploy a `Service` with a few fields; the platform's machinery handles networking, security policies, observability injection, and compliance requirements transparently.
+
+This is why platform engineering roles increasingly require Kubernetes expertise at a deep level, even for teams that do not want application developers to interact with Kubernetes directly. The platform is built on Kubernetes. The abstractions hide it. Building good abstractions requires understanding what they are hiding.
+
+## Measuring Platform Success
+
+Platform teams sometimes measure their success in platform terms: how many services are onboarded, how many dashboards are created, what percentage of teams use the standard pipeline. These are activity metrics, not outcome metrics.
+
+The right measure is developer velocity. How long does it take a new service to reach production? How often do development teams file tickets with the platform team vs. self-serving? How much time does the average application engineer spend on infrastructure-adjacent work per sprint?
+
+If those numbers are not improving, the platform is not succeeding at its purpose, regardless of what its feature list looks like. Platform engineering succeeds or fails by whether it makes the engineers it serves more effective. That requires treating internal users as real customers, listening to their feedback seriously, and treating usability as a first-class engineering concern.
+
+## The Danger of "You Build It You Run It" Without Platform Support
+
+Pushing operational ownership to teams without supporting them with a capable platform is how organizations burn out their senior engineers. The engineers who can figure out Kubernetes networking, write admission controller policies, design sensible alerting, and maintain their own infrastructure end up doing all of it — and stop having time to build product.
+
+DevOps as a philosophy requires platform engineering as its operational expression. The cultural shift and the technical platform are not alternatives; they are complementary. One without the other produces the failure modes each was meant to solve.

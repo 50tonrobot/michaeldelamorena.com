@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "michaeldelamorena-com.fullname" . }}
+  namespace: michaeldelamorena-com
+  labels:
+    {{- include "michaeldelamorena-com.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "michaeldelamorena-com.selectorLabels" . | nindent 4 }}

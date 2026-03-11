@@ -1,0 +1,32 @@
+---
+title: "Kubernetes Homelab Cluster"
+description: "A production-grade K3s cluster running on Raspberry Pi hardware, used to prototype and validate cloud-native architectures."
+date: "2026-03-01"
+tags: ["kubernetes", "k3s", "homelab", "platform-engineering", "raspberry-pi"]
+featured: true
+order: 1
+draft: false
+---
+
+Running a production-grade Kubernetes cluster at home sounds like overkill until you realize how much you learn from operating real infrastructure without the safety net of a managed service.
+
+## Problem Statement
+
+Most Kubernetes experience comes from managed cloud services that abstract away cluster operations. To understand what platform teams deal with at the infrastructure layer, you need to operate your own control plane.
+
+## Architecture
+
+The cluster runs K3s on Raspberry Pi nodes with NVMe storage via USB-C adapters. The network is segmented using VLANs to isolate cluster traffic. Ingress is handled by Traefik with TLS termination via cert-manager and Let's Encrypt. DNS is managed through Pi-hole with local overrides for cluster services.
+
+## Technologies Used
+
+- K3s — lightweight Kubernetes distribution
+- Raspberry Pi — ARM64 hardware nodes
+- Traefik — ingress controller and TLS termination
+- cert-manager — certificate automation
+- Pi-hole — DNS and local name resolution
+- Longhorn — distributed block storage
+
+## Lessons Learned
+
+ARM64 compatibility is the first constraint. Not all container images publish multi-arch manifests. Storage on USB-attached media introduces latency that managed cloud storage does not. The networking complexity — VLANs, NAT, ingress — mirrors enterprise environments exactly.

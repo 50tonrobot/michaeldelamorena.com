@@ -1,0 +1,54 @@
+---
+title: "What a Kubernetes Homelab Actually Teaches You"
+description: "Running K3s on Raspberry Pi hardware in a home network exposes infrastructure problems that managed cloud services are specifically designed to hide."
+date: "2025-12-10"
+tags: ["kubernetes", "k3s", "homelab", "raspberry-pi", "platform-engineering"]
+featured: false
+draft: false
+---
+
+The most common reaction when I tell other engineers about my homelab is a mix of amusement and skepticism: "Why would you run Kubernetes on Raspberry Pis when you can just spin up EKS?" The question misunderstands what the homelab is for. I am not running it because it is cheaper or easier than cloud. I am running it because it makes visible all the things that cloud managed services hide — and those hidden things are exactly what platform engineers need to understand.
+
+## ARM64 and the Image Ecosystem
+
+Cloud Kubernetes on x86 nodes insulates you from CPU architecture concerns. Every container image in your workload catalog was built for amd64, and it works. The ARM64 environment immediately surfaces which images do not have multi-arch manifests.
+
+The impact is broader than it first appears. Some open-source tools still publish only amd64 images. Some base images for internal tools were built on developer laptops that are now ARM (M-series Macs), which creates surprising compatibility mismatches in the other direction. Running ARM64 production workloads is increasingly common — AWS Graviton, GCP Tau T2A — and the homelab experience translates directly to understanding why CI/CD pipelines need to produce multi-arch images and why image manifest lists matter.
+
+## Storage on Real Hardware
+
+EKS with EBS or GKE with Persistent Disk abstracts away what distributed storage actually costs. Provisioning a PVC takes seconds. Performance is consistent and documented. The failure mode is rare and handled by AWS.
+
+Longhorn on Raspberry Pi nodes with NVMe over USB-C is a different operational reality. USB-C bus contention is real. A node with multiple USB devices competing for bandwidth degrades storage throughput in ways that are difficult to predict. NVMe drives that perform well in sequential benchmarks have much higher latency for the small random I/O that databases and etcd actually produce.
+
+Longhorn's distributed block storage works by replicating volumes across nodes. A three-node cluster replicating every volume three times is doing a lot of small I/O across a home network. Watching Longhorn's replica sync during a node restart taught me more about distributed storage behavior than any documentation had.
+
+## Networking That Mirrors Enterprise Reality
+
+Cloud networking abstracts away a significant amount of complexity. VPCs, subnets, and security groups are real concepts, but the underlying mechanisms are managed.
+
+The homelab network runs VLANs to segment cluster traffic from home network traffic, with a Traefik ingress controller handling TLS termination for all cluster-internal services. Pi-hole manages DNS, including local overrides that resolve cluster services by hostname. The combination of VLAN tagging, managed switch configuration, iptables NAT rules, and DNS split-horizon is closer to enterprise network configuration than most cloud-native engineers encounter in their day jobs.
+
+cert-manager and Let's Encrypt work exactly the same way at home as they do in production — the DNS challenge verification, certificate rotation, and Kubernetes Secret management are identical. Operating this system on hardware I own made the failure modes concrete: what happens when cert-manager cannot reach the ACME endpoint, how certificate expiration alerts work, what the recovery process looks like when a certificate renewal fails silently.
+
+## What Breaks First
+
+The predictable failure modes have been instructive.
+
+Node memory pressure is the most common source of instability. Raspberry Pi 4 nodes have 4GB or 8GB of RAM. Running the full platform stack — K3s, Longhorn, Prometheus, Grafana, Loki, Traefik, cert-manager, Pi-hole — consumes a substantial fraction of available memory before any application workloads run. This produced a real working knowledge of Kubernetes resource requests and limits, node allocatable capacity calculations, and the behavior of the OOM killer in a constrained environment.
+
+Cluster network failures from hardware issues — a switch misconfiguration, a cable with marginal contact — produce the same symptoms as Kubernetes network policy issues. Diagnosing them requires knowing how to distinguish infrastructure failure from cluster configuration failure, which is a skill that managed cloud services make difficult to develop because the infrastructure tier is inaccessible.
+
+## The Observability Stack on Constrained Hardware
+
+Running Prometheus, Grafana, and Loki on small nodes requires attention to resource efficiency that is easy to ignore in cloud environments where scaling up is one API call away.
+
+Prometheus cardinality — the number of unique label combinations in stored time series — has a direct impact on memory consumption. A Prometheus instance with high cardinality will OOM a Raspberry Pi node in ways that would take days to notice on a cloud VM with 64GB of RAM. Understanding cardinality as a first-class operational concern, not a theoretical performance consideration, came from watching the OOM killer terminate Prometheus at 2am.
+
+Loki's index and chunk storage behavior on Longhorn produced concrete understanding of write amplification, compaction timing, and the relationship between Loki's configuration parameters and its actual storage consumption. The Loki documentation describes these parameters abstractly. Watching them manifest in real storage usage makes the abstractions concrete.
+
+## What Translated Directly to Production
+
+Understanding why cluster autoscaler decisions are made — because I had experienced the equivalent situation without autoscaling. Understanding why distributed storage replication factors matter — because I had watched a Longhorn volume degrade during a node restart. Understanding why DNS resolution reliability is a platform concern — because Pi-hole being the single DNS resolver for the entire cluster made its availability critical.
+
+Every war story from operating the homelab corresponds to a problem category that exists in production at scale. The homelab version is smaller and more recoverable. The knowledge transfers directly.

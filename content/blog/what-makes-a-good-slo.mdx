@@ -1,0 +1,68 @@
+---
+title: "What Makes a Good SLO"
+description: "SLOs are proxies for user happiness, not engineering metrics. Getting that distinction right determines whether they're useful or just decorative."
+date: "2026-02-20"
+tags: ["sre", "slo", "reliability", "observability"]
+featured: false
+draft: false
+---
+
+Most SLOs I have reviewed measure what is convenient to measure. Error rate from the load balancer access log. Uptime from a synthetic ping. Latency at the 50th percentile. These are real numbers, but they are not necessarily telling you what your users are experiencing. An SLO that does not correlate with user experience is not a reliability target — it is a comfort metric that creates false confidence.
+
+## What an SLO Is Actually For
+
+A Service Level Objective is a target for a Service Level Indicator — a quantitative measurement of some aspect of service behavior. But the measurement is not the goal. The goal is to define, in operational terms, what "working correctly" means for the people using the system.
+
+The question to ask when designing an SLO is not "what can I measure?" It is "what would a user notice, and at what threshold would they consider the service degraded?" Everything else is an implementation detail.
+
+## Why Error Rate Alone Is Insufficient
+
+An error rate SLO — say, 99.9% of requests succeed — sounds rigorous. In practice it can mask significant user-facing problems.
+
+A response that takes 45 seconds and returns HTTP 200 is counted as a success. A response that returns 200 with a corrupted payload is a success. A background job that silently drops work is not counted at all because it generates no requests. Error rate measures one dimension of a multi-dimensional problem.
+
+Availability is necessary but not sufficient. An available service that is too slow to use, or that succeeds according to its own definition while failing according to the user's definition, is not meeting its actual reliability obligation.
+
+## Latency Percentiles vs Averages
+
+Averages are statistical aggregates that can behave counterintuitively in skewed distributions. If 95% of requests complete in 50ms and 5% take 10 seconds, the average might be a respectable 600ms — a number that looks acceptable in a dashboard while 1 in 20 users experiences a 10-second wait.
+
+High percentiles expose the tail behavior that averages hide. The 95th and 99th percentile latencies tell you what your least-lucky users experience. For interactive systems, the 95th percentile latency is usually the right primary SLI. For batch or background systems, throughput and completion latency over a time window are more appropriate.
+
+The choice of percentile should reflect the user impact model. A p99 latency target makes sense for a system where individual requests matter. A p50 target makes sense for a system where aggregate throughput matters more than individual request variability.
+
+## Choosing the Right SLI
+
+The SLI should measure something causally connected to user satisfaction, not something that merely correlates with system health.
+
+For a request-serving system: request success rate and latency at a meaningful percentile are strong SLIs. Measuring CPU utilization as an SLI is wrong — it measures resource consumption, not user experience. A system can be CPU-saturated and performing fine, or CPU-idle and completely broken.
+
+For a data pipeline: data freshness (how old is the most recent processed record) and processing completeness (what fraction of input records have been processed) are meaningful SLIs. End-to-end latency from data arrival to availability for query is often the right SLI for analytical systems.
+
+For a batch job: completion success rate and completion time relative to a schedule are meaningful. A job that completes within its window 99.5% of the time is meeting a different obligation than one that completes but chronically runs hours late.
+
+## Setting Realistic Targets
+
+Two failure modes are common when setting SLO targets.
+
+The first is aspirational target-setting: teams pick 99.99% because it sounds serious, without verifying that their current infrastructure can achieve it or that users actually require it. An SLO you cannot currently meet is not a target — it is an indictment.
+
+The second is cherry-picking a measurement window where historical performance looks good. Measuring the last 30 days during a stable period hides seasonal traffic patterns, dependency failure modes, and deployment-related regressions. Measure over a time window that captures representative load, including known bad periods.
+
+A reasonable starting process: measure current actual performance, add context for known incidents, then set the initial SLO slightly below current performance. This establishes a baseline. Error budgets create the operational incentive to improve it.
+
+## Error Budgets and What They Enable
+
+The error budget is the complement of the SLO: the amount of unreliability that is acceptable within the measurement window. A 99.9% SLO over 30 days has an error budget of approximately 43 minutes of downtime.
+
+Error budgets shift the framing from "are we reliable?" to "how are we spending our unreliability allowance?" If the error budget is being consumed rapidly by a flaky dependency, that is a prioritization signal. If the budget is consistently unspent, the SLO target may be set too conservatively — which itself is a problem because it limits deployment velocity for no benefit.
+
+## Common Mistakes
+
+Measuring what is easy instead of what matters: this produces SLOs that are technically met while users are unhappy. Synthetic health checks that test the wrong thing are particularly common.
+
+Setting targets too high across the board: not every service needs five nines. Internal services, administrative tools, and non-critical paths have lower user expectations. Treating everything as high-criticality wastes engineering effort and error budget discipline on systems that do not warrant it.
+
+Treating SLOs as commitments to optimize away: the error budget exists to be spent on risk-taking, experimentation, and deployment. Teams that optimize to use zero error budget are not being reliable — they are being so conservative that they are slowing their own development velocity without a corresponding benefit to users.
+
+An SLO is a conversation tool as much as a technical measurement. It makes explicit what level of service the team is committing to deliver, and it gives everyone — the team, its users, and its stakeholders — a shared vocabulary for discussing reliability.

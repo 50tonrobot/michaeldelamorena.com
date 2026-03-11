@@ -463,81 +463,88 @@ The `a11y-auditor` agent runs automatically after all frontend work and must cle
 
 **Deliverables:** Runnable skeleton with layout, navigation, and all static pages
 
-- [ ] 1. Initialize Next.js 15 project with TypeScript strict mode
-- [ ] 2. Install and configure Tailwind CSS v4
-- [ ] 3. Install and configure shadcn/ui (minimal component set)
-- [ ] 4. Create root `app/layout.tsx` with fonts, dark mode class strategy, `SkipToMain`, `CookieBanner`, `Header`, `Footer`
-- [ ] 5. Implement `CookieBanner` component with localStorage consent logic
-- [ ] 6. Wire Google Analytics via `@next/third-parties/google` — load only after cookie consent granted
-- [ ] 7. Build `Header` with responsive mobile nav (hamburger menu with `aria-expanded`)
-- [ ] 8. Build `Footer` with links to GitHub, LinkedIn, email
-- [ ] 9. Scaffold all page routes as empty shells: `/`, `/about`, `/projects`, `/blog`, `/resume`, `/contact`
+- [x] 1. Initialize Next.js 16.1.6 project with TypeScript strict mode
+- [x] 2. Install and configure Tailwind CSS v4
+- [x] 3. Install and configure shadcn/ui (button, badge, separator)
+- [x] 4. Create `types/content.ts`, `lib/site.ts`, `lib/mdx.ts`, `lib/content.ts`
+- [x] 5. Create `app/sitemap.ts` and `app/robots.ts`
+- [x] 6. Seed `content/blog/` and `content/projects/` with placeholder MDX files
+- [x] 7. Create root `app/layout.tsx` with fonts, dark mode, `SkipToMain`, `CookieBanner`, `Header`, `Footer`
+- [x] 8. Implement `CookieBanner` component with localStorage consent + GA loading
+- [x] 9. Build `Header` with responsive mobile nav (`aria-expanded`, keyboard nav)
+- [x] 10. Build `Footer` with GitHub, LinkedIn, email links
+- [x] 11. Scaffold all page routes as empty shells: `/`, `/about`, `/projects`, `/blog`, `/resume`, `/contact`
 
-**Agent pipeline:** `frontend-component-builder` → `testing-agent` → `a11y-auditor`
+**Agent pipeline:** `frontend-component-builder` ✅ → `testing-agent` ✅ (64 tests, all pass) → `a11y-auditor` ✅ (6 violations found and fixed, all pages WCAG 2.2 AA)
+
+### Phase 1 ✅ COMPLETE
 
 ---
 
-### Phase 2: Content Engine
+### Phase 2: Content Engine 🚧 IN PROGRESS
 
 **Deliverables:** MDX loading, blog/project dynamic routes working end-to-end
 
-Steps:
-1. Install `next-mdx-remote`, `rehype-pretty-code`, `rehype-slug`, `rehype-autolink-headings`, `remark-gfm`, `shiki`
-2. Create `lib/mdx.ts` — MDX compilation with all plugins configured
-3. Create `lib/content.ts` — functions to:
-   - List all blog posts (read frontmatter, filter drafts, sort by date)
-   - Get single blog post by slug
-   - List all projects (read frontmatter, filter drafts, sort by order)
-   - Get single project by slug
-4. Create `types/content.ts` — `BlogPost`, `Project`, `BlogFrontmatter`, `ProjectFrontmatter` types
-5. Create `app/sitemap.ts` — dynamic sitemap combining static routes + all MDX slugs
-6. Create `app/robots.ts`
-7. Implement `app/blog/page.tsx` — blog index reading from `content/blog/`
-8. Implement `app/blog/[slug]/page.tsx` — dynamic blog post with `generateStaticParams`
-9. Implement `app/projects/page.tsx` — projects index
-10. Implement `app/projects/[slug]/page.tsx` — dynamic project page with `generateStaticParams`
-11. Create `MDXContent` component with custom element overrides (code, pre, a, img)
+- [x] 1. Install `next-mdx-remote`, `rehype-pretty-code`, `rehype-slug`, `rehype-autolink-headings`, `remark-gfm`, `shiki` (done in Phase 1)
+- [x] 2. Create `lib/mdx.ts` — MDX compilation with all plugins configured (done in Phase 1)
+- [x] 3. Create `lib/content.ts` — blog/project loaders (done in Phase 1)
+- [x] 4. Create `types/content.ts` — shared TypeScript types (done in Phase 1)
+- [x] 5. Create `app/sitemap.ts` — dynamic sitemap (done in Phase 1)
+- [x] 6. Create `app/robots.ts` (done in Phase 1)
+- [x] 7. Implement `app/blog/page.tsx` — blog index with article cards
+- [x] 8. Implement `app/blog/[slug]/page.tsx` — dynamic blog post with `generateStaticParams`
+- [x] 9. Implement `app/projects/page.tsx` — projects index with project cards
+- [x] 10. Implement `app/projects/[slug]/page.tsx` — dynamic project page with `generateStaticParams`
+- [x] 11. Create `components/content/MDXContent.tsx` — MDX renderer with custom element overrides
+- [x] 12. Create `components/content/ArticleCard.tsx`, `ProjectCard.tsx`, `TagList.tsx`
 
-**Agent pipeline:** `enterprise-code-architect` (lib/ + types/) → `frontend-component-builder` (pages) → `testing-agent`
+**Agent pipeline:** `enterprise-code-architect` (lib/ + types/) ✅ → `frontend-component-builder` (pages) ✅ → `testing-agent` ✅ (94 tests, all pass) → `a11y-auditor` ✅ (4 violations found and fixed)
+
+### Phase 2 ✅ COMPLETE
 
 ---
 
-### Phase 3: Page Content
+### Phase 3: Page Content 🚧 IN PROGRESS
 
 **Deliverables:** All pages fully implemented with real content
 
-Steps:
-1. Build Home page — all 6 sections with real copy and metrics
-2. Build About page — background, philosophy, current exploration
-3. Build Resume page — downloadable PDF link + web version of resume content
-4. Build Contact page — links + optional mailto form
-5. Create all 5 project MDX files in `content/projects/`
-6. Create initial 10 blog post MDX files in `content/blog/`
-7. Add `public/resume.pdf`
-8. Add `public/headshot.jpg`
-9. Add architecture diagrams to `public/diagrams/`
-10. Create `public/og-default.png` OpenGraph default image
+- [x] 1. Build Home page — Hero, Specializations, Metrics, Featured Projects, Latest Articles, CTA
+- [x] 2. Build About page — background, philosophy, current exploration
+- [x] 3. Build Resume page — downloadable PDF link + web version of resume content
+- [x] 4. Build Contact page — links + optional mailto form
+- [x] 5. Create remaining 4 project MDX files in `content/projects/`
+- [x] 6. Create remaining 9 blog post MDX files in `content/blog/`
+- [x] 7. Add `public/michael-delamorena-resume-2026-03.pdf` — resume PDF added; all links updated via `siteConfig.resumePdf`
+- [x] 8. Add `public/hero-action-figure.jpg` — action figure hero image added; Hero updated to two-column layout with Next.js Image optimization
+- [x] 9. Add `public/og-default.png` — generated via Playwright script (1200×630, dark zinc palette)
 
-**Agent pipeline:** `frontend-component-builder` → `a11y-auditor` → `design-review`
+**Agent pipeline:** `frontend-component-builder` ✅ → `a11y-auditor` ✅ (4 violations fixed) → `testing-agent` ✅ (158 tests, all pass) → `design-review` (pending — run when ready)
+
+### Phase 3 ✅ COMPLETE (one optional manual asset remaining: og-default.png)
 
 ---
 
-### Phase 4: Polish and Launch
+### Phase 4: Polish and Launch 🚧 IN PROGRESS
 
 **Deliverables:** Production-ready site deployed to Vercel
 
-Steps:
-1. Audit all pages at mobile (375px), tablet (768px), desktop (1280px) breakpoints
-2. Verify WCAG 2.2 AA compliance with `a11y-auditor`
-3. Add `generateMetadata` to all pages with correct OpenGraph and Twitter card data
-4. Run `security-scanner` before deploying
-5. Run `pragmatic-code-review`
-6. Push to GitHub
-7. Connect Vercel project to GitHub repo
-8. Add `NEXT_PUBLIC_GA_MEASUREMENT_ID` to Vercel environment variables
-9. Configure custom domain `michaeldelamorena.com` in Vercel
-10. Verify sitemap is accessible at `https://michaeldelamorena.com/sitemap.xml`
-11. Submit sitemap to Google Search Console
+- [x] 1. Responsive layout verified at 375px / 768px / 1280px — 2 issues fixed (cookie banner body padding, MDX prose width)
+- [x] 2. Security scan — 0 critical/high; 2 medium fixed (CSP headers, slug validation + frontmatter hardening)
+- [x] 3. Final code review — approved; 4 improvements applied (package name, dead code, type consistency, frontmatter validation)
+- [x] 4. 158 tests passing
+- [x] 5. Add `output: 'standalone'` to `next.config.ts` for Docker builds
+- [x] 6. Create `Dockerfile` (multi-stage, `linux/arm64`, standalone Next.js output, non-root UID 1001)
+- [x] 7. Create `.dockerignore`
+- [x] 8. Create Helm chart at `helm/michaeldelamorena-com/` — 2 replicas, Traefik ingress, cert-manager TLS, Pi-friendly resource limits
+- [x] 9. Create `scripts/deploy` — auto-increments semver, builds arm64 image, pushes to registry, tags git, deploys via Helm
+- [ ] 10. Push to GitHub
+- [ ] 11. Deploy: run `scripts/deploy` to build, push, and install on k3s
+- [ ] 12. Verify sitemap at `https://michaeldelamorena.com/sitemap.xml`
+- [ ] 13. Submit sitemap to Google Search Console
+
+**Deployment stack:** Docker → `registry.example.internal` → Helm → k3s (aarch64) → Traefik ingress → cert-manager TLS → `michaeldelamorena.com`
+
+**Note on GA Measurement ID:** `NEXT_PUBLIC_GA_MEASUREMENT_ID` is inlined at Next.js build time. It is passed as a Docker `--build-arg` (read from `.env.local` by `scripts/deploy`) and baked into the image. It does not need a Kubernetes Secret.
 
 ---
 

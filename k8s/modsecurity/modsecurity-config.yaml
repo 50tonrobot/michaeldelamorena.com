@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: modsecurity-michaeldelamorena-com-config
+  namespace: default
+data:
+  # main.conf — loaded by nginx modsecurity_rules_file directive.
+  # Includes our custom settings first (paranoia/thresholds), then CRS setup
+  # and all CRS rules from the image's /opt/owasp-crs directory.
+  main.conf: |
+    Include /etc/nginx/modsec/modsecurity.conf
+    Include /opt/owasp-crs/crs-setup.conf
+    Include /opt/owasp-crs/rules/*.conf
+
+  modsecurity.conf: |
+    # ModSecurity configuration — inspector mode
+    # The traefik-modsecurity-plugin calls this service for WAF inspection.
+    # ModSecurity returns 200 (allow) or 403 (block). Traefik routes to the
+    # actual app backend only when this service returns 200.
+    SecRuleEngine On
+    SecRequestBodyAccess On
+    SecResponseBodyAccess Off
+    SecRequestBodyLimit 13107200
+    SecRequestBodyNoFilesLimit 131072
+    SecRequestBodyLimitAction Reject
+    SecPcreMatchLimit 100000
+    SecPcreMatchLimitRecursion 100000
+
+    # Audit logging — only log blocked and 5xx responses to reduce noise
+    SecAuditEngine RelevantOnly
+    SecAuditLogRelevantStatus "^(?:5|4(?!04))"
+    SecAuditLogParts ABIJDEFHZ
+    SecAuditLogType Serial
+    SecAuditLog /var/log/modsecurity/modsec_audit.log
+    SecAuditLogFormat JSON
+
+    # Paranoia level 1 — standard CRS protection, low false positive rate
+    # Appropriate for a static personal site with no API or user-generated content
+    SecAction \
+      "id:900000,\
+       phase:1,\
+       nolog,\
+       pass,\
+       t:none,\
+       setvar:tx.paranoia_level=1"
+
+    # Anomaly score thresholds
+    # Inbound: 5 (default) — triggers on high-confidence attack patterns
+    # Outbound: 4 (default) — minimal since this is a read-only static site
+    SecAction \
+      "id:900110,\
+       phase:1,\
+       nolog,\
+       pass,\
+       t:none,\
+       setvar:tx.inbound_anomaly_score_threshold=5,\
+       setvar:tx.outbound_anomaly_score_threshold=4"
+
+    # False positive exception: PostHog analytics cookies contain MongoDB-style
+    # $ operators (e.g. $device_id, $in, $sesid) in their JSON values which
+    # trigger rule 942290 (MongoDB SQLi detection). These are legitimate
+    # analytics cookies set by PostHog and pose no security risk.
+    SecRuleUpdateTargetById 942290 "!REQUEST_COOKIES:ph_phc_4URIAm1uYfJO7j8kWSe0J8lc8IqnstRLS7Jx8NcakHo_posthog"
+
+  nginx.conf: |
+    # Load the ModSecurity dynamic module.
+    # This line is required because we replace the entire nginx.conf via ConfigMap,
+    # which would otherwise discard any load_module directives from the image default.
+    load_module /usr/lib/nginx/modules/ngx_http_modsecurity_module.so;
+
+    worker_processes auto;
+    error_log /var/log/nginx/error.log warn;
+    # Use /tmp for pid — writable by non-root UID 1000
+    pid /tmp/nginx.pid;
+
+    events {
+      worker_connections 1024;
+    }
+
+    http {
+      # Use /tmp for all temp paths — writable by non-root UID 1000
+      proxy_temp_path      /tmp/proxy_temp;
+      client_body_temp_path /tmp/client_temp;
+      fastcgi_temp_path    /tmp/fastcgi_temp;
+      uwsgi_temp_path      /tmp/uwsgi_temp;
+      scgi_temp_path       /tmp/scgi_temp;
+
+      include      /etc/nginx/mime.types;
+      default_type application/octet-stream;
+
+      # Structured JSON access log for WAF inspection events
+      log_format json_waf escape=json
+      '{'
+        '"timestamp":"$time_iso8601",'
+        '"remote_addr":"$remote_addr",'
+        '"request_method":"$request_method",'
+        '"request_uri":"$request_uri",'
+        '"status":$status,'
+        '"http_user_agent":"$http_user_agent",'
+        '"request_time":$request_time'
+      '}';
+
+      access_log /var/log/nginx/access.log json_waf;
+      sendfile on;
+      keepalive_timeout 65;
+
+      server {
+        listen 80;
+        server_name _;
+
+        # ModSecurity WAF inspection — runs in access phase
+        modsecurity on;
+        modsecurity_rules_file /etc/nginx/modsec/main.conf;
+
+        client_body_buffer_size 128k;
+        client_max_body_size 10m;
+
+        location / {
+          # Inspector mode: proxy to a non-existent upstream so ModSecurity
+          # runs its access phase checks. If ModSecurity blocks, it returns
+          # 403 directly. If it passes, the connection to 65535 is refused
+          # (502), which we remap to 200 so Traefik proceeds to the real backend.
+          proxy_pass http://127.0.0.1:65535;
+          proxy_connect_timeout 1s;
+          error_page 502 504 =200 @inspection_passed;
+        }
+
+        location @inspection_passed {
+          add_header Content-Type text/plain;
+          add_header X-ModSecurity-Inspected "true";
+          return 200 "OK";
+        }
+
+        # Health check — bypasses ModSecurity to avoid false positives on probe traffic
+        location /health {
+          access_log off;
+          modsecurity off;
+          return 200 "healthy\n";
+          add_header Content-Type text/plain;
+        }
+      }
+    }
