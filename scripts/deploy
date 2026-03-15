@@ -16,10 +16,21 @@ if [[ -z "$GA_ID" ]]; then
   exit 1
 fi
 
-# ─── Registry credentials (from ~/.zshrc: REGISTRY_DOMAIN, REGISTRY_USERNAME, REGISTRY_PASSWORD) ─
-: "${REGISTRY_DOMAIN:?REGISTRY_DOMAIN is not set. Source ~/.zshrc or export it.}"
-: "${REGISTRY_USERNAME:?REGISTRY_USERNAME is not set.}"
-: "${REGISTRY_PASSWORD:?REGISTRY_PASSWORD is not set.}"
+# ─── Registry credentials (defaults match financialcalendar deploy script) ──
+REGISTRY_DOMAIN="${REGISTRY_DOMAIN:-registry.example.internal}"
+REGISTRY_USERNAME="${REGISTRY_USERNAME:-50tonrobot}"
+
+# Load REGISTRY_PASSWORD from ~/.zshrc if not already in the environment
+if [[ -z "${REGISTRY_PASSWORD:-}" ]]; then
+  if [[ -f "$HOME/.zshrc" ]]; then
+    export REGISTRY_PASSWORD=$(bash -c "source $HOME/.zshrc 2>/dev/null && echo \$REGISTRY_PASSWORD")
+  fi
+fi
+
+if [[ -z "${REGISTRY_PASSWORD:-}" ]]; then
+  echo "Error: REGISTRY_PASSWORD not set. Export it or add to ~/.zshrc"
+  exit 1
+fi
 
 IMAGE_NAME="${REGISTRY_DOMAIN}/michaeldelamorena-com"
 
