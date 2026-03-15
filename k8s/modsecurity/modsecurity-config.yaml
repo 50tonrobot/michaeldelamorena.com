@@ -31,7 +31,7 @@ data:
     SecAuditLogRelevantStatus "^(?:5|4(?!04))"
     SecAuditLogParts ABIJDEFHZ
     SecAuditLogType Serial
-    SecAuditLog /var/log/modsecurity/modsec_audit.log
+    SecAuditLog /dev/stderr
     SecAuditLogFormat JSON
 
     # Paranoia level 1 — standard CRS protection, low false positive rate
@@ -56,6 +56,17 @@ data:
        setvar:tx.inbound_anomaly_score_threshold=5,\
        setvar:tx.outbound_anomaly_score_threshold=4"
 
+    # Next.js CRS exclusion pack — suppresses known false positives from Next.js
+    # internals (e.g. _next/static/ requests, hydration headers).
+    # Same exclusion applied to financialcalendar.
+    SecAction \
+      "id:900130,\
+       phase:1,\
+       nolog,\
+       pass,\
+       t:none,\
+       setvar:tx.crs_exclusions_nextjs=1"
+
     # False positive exception: PostHog analytics cookies contain MongoDB-style
     # $ operators (e.g. $device_id, $in, $sesid) in their JSON values which
     # trigger rule 942290 (MongoDB SQLi detection). These are legitimate
@@ -69,7 +80,7 @@ data:
     load_module /usr/lib/nginx/modules/ngx_http_modsecurity_module.so;
 
     worker_processes auto;
-    error_log /var/log/nginx/error.log warn;
+    error_log /dev/stderr warn;
     # Use /tmp for pid — writable by non-root UID 1000
     pid /tmp/nginx.pid;
 
@@ -100,7 +111,7 @@ data:
         '"request_time":$request_time'
       '}';
 
-      access_log /var/log/nginx/access.log json_waf;
+      access_log /dev/stdout json_waf;
       sendfile on;
       keepalive_timeout 65;
 

@@ -89,3 +89,24 @@ echo "Deployed ${IMAGE_NAME}:${NEW_VERSION} to k3s"
 echo "Tagged $NEW_TAG"
 echo ""
 echo "  Site: https://michaeldelamorena.com"
+
+# ─── Cloudflare cache purge (optional — requires CLOUDFLARE_CACHE_PURGE_TOKEN + CLOUDFLARE_ZONE_ID) ─
+if [[ -n "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" && -n "${CLOUDFLARE_ZONE_ID:-}" ]]; then
+  echo ""
+  echo "Purging Cloudflare cache..."
+  CF_RESPONSE=$(curl -s -X POST \
+    "https://api.cloudflare.com/client/v4/zones/${CLOUDFLARE_ZONE_ID}/purge_cache" \
+    -H "Authorization: Bearer ${CLOUDFLARE_CACHE_PURGE_TOKEN}" \
+    -H "Content-Type: application/json" \
+    --data '{"purge_everything":true}')
+
+  if echo "$CF_RESPONSE" | grep -q '"success":true'; then
+    echo "Cloudflare cache purged successfully"
+  else
+    echo "Warning: Cloudflare cache purge failed or token not configured"
+    echo "$CF_RESPONSE"
+  fi
+else
+  echo ""
+  echo "Skipping Cloudflare cache purge (CLOUDFLARE_CACHE_PURGE_TOKEN / CLOUDFLARE_ZONE_ID not set)"
+fi

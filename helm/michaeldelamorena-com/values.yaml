@@ -1,4 +1,4 @@
-replicaCount: 2
+replicaCount: 1
 
 image:
   repository: registry.example.internal/michaeldelamorena-com
@@ -60,6 +60,13 @@ readinessProbe:
     port: 3000
   initialDelaySeconds: 5
   periodSeconds: 10
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 60   # 60% leaves headroom before throttling on Pi nodes
+  targetRPSPerPod: "20"               # aligns with CPU capacity; tune after load testing
 
 nodeSelector: {}
 tolerations: []

@@ -6,7 +6,6 @@ metadata:
   labels:
     app: modsecurity-michaeldelamorena-com
 spec:
-  replicas: 2
   selector:
     matchLabels:
       app: modsecurity-michaeldelamorena-com
