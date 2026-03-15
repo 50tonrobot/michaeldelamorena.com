@@ -1,36 +1,117 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# michaeldelamorena.com
 
-## Getting Started
+Personal portfolio and blog. Built with Next.js 16 App Router, deployed to a self-hosted k3s homelab, and served through Cloudflare's edge network.
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 16 (App Router, SSG) |
+| Language | TypeScript 5 (strict) |
+| Styling | Tailwind CSS 4 |
+| Content | MDX files via `next-mdx-remote` |
+| Runtime | Node.js (standalone Docker image) |
+| Container registry | Private registry at `registry.example.internal` |
+| Orchestration | k3s (Kubernetes) on Raspberry Pi nodes |
+| Ingress | Traefik with cert-manager / Let's Encrypt |
+| WAF | OWASP ModSecurity CRS (inspector mode) |
+| CDN / proxy | Cloudflare (proxied, Cache Rules configured) |
+| Architecture | `linux/arm64` (Raspberry Pi cluster) |
+
+## Site Structure
+
+All pages are statically generated at build time (`generateStaticParams` — no ISR, no server-side rendering). Content only changes on deploy.
+
+```
+/                   Home — hero, specializations, featured projects
+/about              About
+/blog               Blog index
+/blog/[slug]        Blog posts (MDX in content/blog/)
+/projects           Projects index
+/projects/[slug]    Project case studies (MDX in content/projects/)
+/resume             Resume / CV
+/contact            Contact
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Content
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Drop MDX files into the appropriate directory. Frontmatter schema is defined in `types/content.ts`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+content/
+  blog/        Blog posts — set draft: false to publish
+  projects/    Project case studies — set featured: true to surface on home page
+```
 
-## Learn More
+The sitemap (`/sitemap.xml`) and robots file (`/robots.txt`) are generated automatically from `app/sitemap.ts` and `app/robots.ts`.
 
-To learn more about Next.js, take a look at the following resources:
+## Local Development
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm install
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Open [http://localhost:3000](http://localhost:3000).
 
-## Deploy on Vercel
+## Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+scripts/deploy
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The script:
+1. Reads `NEXT_PUBLIC_GA_MEASUREMENT_ID` from `.env.local`
+2. Loads registry credentials from the environment (defaults: `REGISTRY_DOMAIN=registry.example.internal`, `REGISTRY_USERNAME=50tonrobot`; auto-sources `REGISTRY_PASSWORD` from `~/.zshrc` if not exported)
+3. Bumps the patch version from the latest `v*` git tag
+4. Builds a `linux/arm64` Docker image with the GA ID baked in at build time
+5. Pushes `<image>:<version>` and `<image>:latest` to the private registry
+6. Creates a git tag
+7. Runs `helm upgrade --install` into the `michaeldelamorena-com` namespace
+8. Purges the Cloudflare edge cache (if `CLOUDFLARE_CACHE_PURGE_TOKEN` and `CLOUDFLARE_ZONE_ID` are set)
+
+**Versioning:** patch = bug fix, minor = new feature, major = breaking change. The script auto-increments patch. For minor/major, tag manually (`git tag v1.x.0`) before running.
+
+**Required environment variables** (export or add to `~/.zshrc`):
+
+```bash
+REGISTRY_PASSWORD=...
+CLOUDFLARE_CACHE_PURGE_TOKEN=...   # Zone.Cache Purge token scoped to michaeldelamorena.com
+CLOUDFLARE_ZONE_ID=REDACTED_CF_ZONE_ID
+```
+
+See `.env.example` for the full list.
+
+## Infrastructure
+
+```
+Browser
+  └─ Cloudflare edge  (CDN, DDoS, Cache Rules)
+       └─ Router  (port-forwards 443 → Pi-hole)
+            └─ Pi-hole / nginx  (TLS passthrough via ssl_preread SNI)
+                 └─ k3s / Traefik  (TLS termination, Let's Encrypt cert)
+                      └─ ModSecurity  (OWASP CRS WAF, inspector mode)
+                           └─ michaeldelamorena-com pods  (Next.js standalone, arm64)
+```
+
+**ModSecurity — inspector mode:** Traefik's modsecurity plugin forwards each request to the ModSecurity sidecar for a pass/fail decision before routing to the app. ModSecurity proxies to an unreachable port (`127.0.0.1:65535`) — a refused connection is remapped to 200 (pass); a rule match returns 403 (block). The app pods never receive blocked requests.
+
+**Cloudflare caching:** Both `michaeldelamorena.com` and `www` are orange-clouded. Cache Rules are configured to cache everything (HTML pages use `s-maxage=3600`; `/_next/static/*` uses `max-age=31536000, immutable`). The deploy script purges the edge cache after every Helm rollout so stale HTML is never served post-deploy.
+
+**Helm chart:** `helm/michaeldelamorena-com/` — namespace `michaeldelamorena-com`, HPA (1–5 replicas), Traefik ingress with TLS.
+
+## Testing
+
+```bash
+npm test                    # run all tests
+npm test -- --coverage      # with coverage report
+```
+
+Minimum 80% statement coverage on all files in `components/` and `lib/`. All 158 baseline tests must remain passing.
+
+## Security
+
+- `semgrep scan --config=auto --severity=WARNING --severity=ERROR` must return 0 findings before every deploy
+- All filesystem paths built from URL parameters use `safeJoin` + `isValidSlug` (see `lib/content.ts`)
+- CSP, X-Frame-Options, and other security headers are set in `next.config.ts`
+- Never weaken the CSP — add new external origins to the specific directive rather than broadening `default-src`
