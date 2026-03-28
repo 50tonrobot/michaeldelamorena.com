@@ -45,9 +45,9 @@ export function MermaidDiagram({ chart }: MermaidDiagramProps) {
 
       if (!ref.current || cancelled) return;
       const parser = new DOMParser();
-      const doc = parser.parseFromString(svg, 'image/svg+xml');
-      const svgEl = doc.documentElement;
-      ref.current.replaceChildren(svgEl);
+      const doc = parser.parseFromString(svg, 'text/html');
+      const svgEl = doc.querySelector('svg');
+      if (svgEl) ref.current.replaceChildren(svgEl);
     }
 
     render().catch(console.error);
