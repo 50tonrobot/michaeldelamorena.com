@@ -3,6 +3,7 @@ import rehypePrettyCode from "rehype-pretty-code";
 import rehypeSlug from "rehype-slug";
 import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import remarkGfm from "remark-gfm";
+import remarkMermaid from "./remark-mermaid";
 import type { MDXRemoteProps } from "next-mdx-remote/rsc";
 
 type CompileMdxOptions = {
@@ -20,7 +21,7 @@ export async function compileMdxContent({
     options: {
       parseFrontmatter: true,
       mdxOptions: {
-        remarkPlugins: [remarkGfm],
+        remarkPlugins: [remarkMermaid, remarkGfm],
         rehypePlugins: [
           rehypeSlug,
           [

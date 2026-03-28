@@ -1,12 +1,14 @@
 import { compileMdxContent } from "@/lib/mdx";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { MermaidDiagram } from "@/components/content/MermaidDiagram";
 
 interface MDXContentProps {
   source: string;
 }
 
 const mdxComponents = {
+  MermaidDiagram,
   // MDX `# Heading` (h1) is intentionally remapped to h2 to prevent duplicate
   // <h1> elements — each page already has exactly one <h1> in its header.
   h1: ({ children }: { children?: ReactNode }) => (
