@@ -29,6 +29,8 @@ ingress:
     # WAF middleware is shared at the cluster level; security headers are app-specific.
     # Middleware reference format: <namespace>-<name>@kubernetescrd
     traefik.ingress.kubernetes.io/router.middlewares: "default-modsecurity-michaeldelamorena-com@kubernetescrd,michaeldelamorena-com-michaeldelamorena-com-security-headers@kubernetescrd"
+    # Cloudflare Authenticated Origin Pulls — require Cloudflare client cert
+    traefik.ingress.kubernetes.io/router.tls.options: default-cloudflare-mtls@kubernetescrd
   hosts:
     - host: michaeldelamorena.com
       paths:

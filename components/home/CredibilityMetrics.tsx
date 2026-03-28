@@ -1,8 +1,8 @@
 const metrics = [
-  { value: "20+", label: "Years software engineering" },
-  { value: "10+", label: "Years cloud infrastructure" },
+  { value: "20+", label: "Years of engineering & technical leadership" },
+  { value: "15 min", label: "Disaster recovery RTA achieved" },
   { value: "62%", label: "AWS cost reduction achieved" },
-  { value: "40+", label: "Kubernetes clusters governed" },
+  { value: "$527K", label: "AWS infrastructure savings delivered" },
 ];
 
 export function CredibilityMetrics() {
@@ -14,8 +14,8 @@ export function CredibilityMetrics() {
       <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
         {metrics.map((metric) => (
           <div key={metric.label} className="rounded-lg border border-zinc-800 bg-zinc-900 p-6">
-            <dt className="text-sm text-zinc-400 leading-snug">{metric.label}</dt>
-            <dd className="mt-2 text-3xl font-bold text-sky-400">{metric.value}</dd>
+            <dd className="text-3xl font-bold text-sky-400">{metric.value}</dd>
+            <dt className="mt-2 text-sm text-zinc-400 leading-snug">{metric.label}</dt>
           </div>
         ))}
       </dl>
