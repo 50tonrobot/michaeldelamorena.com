@@ -70,6 +70,17 @@ autoscaling:
   targetCPUUtilizationPercentage: 60   # 60% leaves headroom before throttling on Pi nodes
   targetRPSPerPod: "20"               # aligns with CPU capacity; tune after load testing
 
+# PodDisruptionBudget protects against voluntary disruptions (e.g. node drains)
+# taking down all replicas at once. maxUnavailable (not minAvailable) is used
+# because this workload is HPA-managed and scales with replica count.
+# NOTE: with minReplicas: 1, a single running replica + maxUnavailable: 1 is a
+# safe no-op (it permits that one replica to be evicted) — this only becomes
+# actively protective once the HPA scales to 2+ replicas. Do not mistake this
+# for single-replica protection.
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+
 nodeSelector: {}
 tolerations: []
 affinity: {}
