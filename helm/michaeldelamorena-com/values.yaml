@@ -91,3 +91,6 @@ resumeVolume:
   claimName: resume-content
   size: 1Gi
   mountPath: /app/public/documents
+  # Mount a subdir of the volume (not its root) so the root-owned lost+found
+  # dir is never exposed under public/ — Next.js scandir would crash on it.
+  subPath: documents

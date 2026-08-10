@@ -53,6 +53,9 @@ spec:
           volumeMounts:
             - name: resume-content
               mountPath: {{ .Values.resumeVolume.mountPath }}
+              # subPath avoids exposing the volume-root lost+found dir, which
+              # Next.js would try to scandir under public/ and crash on (EACCES).
+              subPath: {{ .Values.resumeVolume.subPath }}
               readOnly: true
           {{- end }}
       {{- if .Values.resumeVolume.enabled }}

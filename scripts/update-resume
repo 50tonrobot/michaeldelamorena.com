@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Upload/replace the resume PDF on the Longhorn volume.
-# Normalizes /Lang + /Title in-cluster (resume-tools image), writes resume.pdf.
+# Normalizes /Lang + /Title in-cluster (resume-tools image), writes documents/resume.pdf.
 # Usage: scripts/update-resume <file.pdf>
 set -euo pipefail
 
@@ -29,7 +29,7 @@ trap cleanup EXIT
 echo "Starting uploader pod $POD ..."
 kubectl run "$POD" -n "$NS" --image="$IMAGE" --restart=Never --overrides='{
   "spec": {
-    "securityContext": {"runAsUser": 1001, "runAsGroup": 1001, "fsGroup": 1001},
+    "securityContext": {"runAsUser": 0, "runAsGroup": 0},
     "imagePullSecrets": [{"name": "my-registry-secret"}],
     "containers": [{
       "name": "uploader",
@@ -43,6 +43,12 @@ kubectl run "$POD" -n "$NS" --image="$IMAGE" --restart=Never --overrides='{
 
 kubectl wait --for=condition=Ready "pod/$POD" -n "$NS" --timeout=120s
 kubectl cp "$file" "$NS/$POD:/tmp/incoming.pdf"
-kubectl exec -n "$NS" "$POD" -- python3 /usr/local/bin/patch_pdf.py /tmp/incoming.pdf /mnt/resume.pdf
-echo -n "on-volume checksum: "; kubectl exec -n "$NS" "$POD" -- md5sum /mnt/resume.pdf
-echo "resume.pdf updated on volume '$PVC'."
+# The volume root holds a root-owned lost+found; the serving pod mounts the
+# "documents" subdir via subPath to avoid it. Write there and make it
+# world-readable so the read-only uid-1001 serving pod can serve it
+# (Longhorn RWX/NFS does not reliably honor fsGroup).
+kubectl exec -n "$NS" "$POD" -- mkdir -p /mnt/documents
+kubectl exec -n "$NS" "$POD" -- python3 /usr/local/bin/patch_pdf.py /tmp/incoming.pdf /mnt/documents/resume.pdf
+kubectl exec -n "$NS" "$POD" -- sh -c 'chmod 0755 /mnt/documents && chmod 0644 /mnt/documents/resume.pdf'
+echo -n "on-volume checksum: "; kubectl exec -n "$NS" "$POD" -- md5sum /mnt/documents/resume.pdf
+echo "documents/resume.pdf updated on volume '$PVC'."
