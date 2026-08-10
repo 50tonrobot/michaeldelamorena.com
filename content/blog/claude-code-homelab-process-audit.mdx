@@ -1,0 +1,75 @@
+---
+title: "One Prompt, Three Problems Found, 3 GB Recovered"
+description: "A single natural-language prompt sent Claude Code on a structured infrastructure investigation across five hosts — and it found things I had stopped noticing."
+date: "2026-04-23"
+tags: ["claude-code", "ai", "homelab", "kubernetes", "platform-engineering"]
+featured: true
+draft: false
+---
+
+The prompt was not elaborate. No structured output format, no explicit list of what to check, no step-by-step instructions. Just this:
+
+> *"Look at the running processes on the pi-hole and each of the k3s nodes, see if you find anything out of place."*
+
+What followed was a methodical infrastructure audit across five hosts — the Raspberry Pi edge node running Pi-hole and nginx, plus the four-node k3s cluster behind it — that surfaced three distinct problems, two of which I had not noticed accumulating over the previous six weeks.
+
+## The Investigation Strategy
+
+Before touching a single host, Claude Code read the infrastructure documentation. My homelab architecture is captured in a markdown file that covers network topology, SSH access patterns, the two-VLAN setup (home LAN and server VLAN), Tailscale configuration, and the full service inventory. Starting there meant the investigation had the right mental model before issuing a single command.
+
+The first attempt at reaching the k3s nodes failed with connection timeouts — expected, since the server VLAN at `10.10.0.0/24` is not directly accessible from my development machine. Rather than stopping to ask, Claude Code recognized that the Pi-hole at `10.10.1.2` sits on both VLANs and used it as a ProxyJump to reach all four cluster nodes. All five `ps aux` calls were issued in parallel, collecting process snapshots from every host in a single round.
+
+That is a small thing, but it matters. The investigation did not serialize across hosts. It gathered the full picture at once, then reasoned across it.
+
+## What the Processes Revealed
+
+### Orphaned tcpdump processes on the Pi-hole (43 days old)
+
+Two `tcpdump` processes had been running on the Pi-hole since March 11:
+
+```
+tcpdump -i eth0 -n dst port 443 and dst host 10.10.1.2
+tcpdump -i eth1 -n dst port 443 and dst host 10.10.0.10
+```
+
+Both were parented to PID 1 — adopted by systemd after their original parent died. Their stdout and stderr both pointed to deleted files under `/tmp/claude-1000/`, the output path used by Claude Code task sessions. The sudo binary they had inherited was marked `(deleted)`, meaning a package update had replaced it in the weeks since they started. No systemd unit, no crontab entry, no output destination.
+
+These processes were relics of a debugging session I had run six weeks earlier and never cleaned up. They had been silently capturing — and discarding — all port 443 traffic on both network interfaces ever since.
+
+### Stale Longhorn InstanceManager on node1 (2.93 GB RSS)
+
+The process list on `iceman-node1` showed a `longhorn-instance-manager` process consuming 35.5% of the node's 8 GB RAM — 2.93 GB of RSS. Cross-referencing that against the Longhorn replica state revealed why: there were two instance-manager pods on node1, but only one of them was referenced by any active replica. The other was a stale pod that Longhorn had created during a volume operation six days earlier and then failed to clean up.
+
+The stale pod was owned by a Longhorn `InstanceManager` CRD object. Deleting the pod alone would have caused it to be recreated. Deleting the CRD cascaded to the pod. Since no active replicas referenced it, the deletion was safe to execute immediately.
+
+### Zombie HPA with 334,221 failed scale attempts (58 days)
+
+The `rq-worker-hpa` HorizontalPodAutoscaler in the default namespace had been logging the same warning for 58 days:
+
+```
+deployments/scale.apps "rq-worker" not found
+```
+
+The backing `rq-worker` deployment no longer existed. The HPA had been left behind when the deployment was removed, and the HPA controller had been faithfully failing to scale it ever since — 334,221 times. It was not causing active harm, but it was generating constant noise in the controller logs and making every `kubectl describe hpa` output read like something was broken.
+
+## The Results
+
+Killing the tcpdump processes was a one-line operation. Deleting the InstanceManager CRD and the zombie HPA were each single kubectl commands.
+
+The impact on node1 was immediate and visible in Grafana before the terminal window had even closed.
+
+![Grafana dashboard showing cluster CPU and memory utilization, with a sharp drop in memory from 38% to 32% corresponding to the cleanup](/claude-code-memory-recovery.png)
+
+Node1 went from 5.7 GB used to 2.7 GB used. Available memory climbed from 2.2 GB to 5.1 GB — a recovery of roughly 3 GB on a node that had been running with 190 MB of swap active. The memory chart does not lie: there is a clean step-change at exactly the point the stale InstanceManager was deleted.
+
+The cluster-level memory utilization chart tells the same story. The longhorn-system namespace had been carrying 4.30 GB. After the deletion, it dropped to 2.90 GB. The step is unambiguous.
+
+## Why This Worked
+
+None of these problems were especially subtle. The 43-day-old tcpdump processes with deleted output files were obviously orphaned. A 2.93 GB RSS on a storage management sidecar is obviously wrong. An HPA logging 334k failed attempts against a nonexistent deployment is obviously a zombie. A human looking at these process lists would have found the same things.
+
+The difference is that I had stopped looking. The cluster had been running stably — no pages, no errors, no user-facing degradation — so there was no forcing function to go audit running processes across five hosts. The things accumulating in the background were all below the threshold of anything that would have surfaced in normal operations. The tcpdumps were invisible because they were not writing output. The memory leak was invisible because node1 still had headroom. The zombie HPA was invisible because the controller logs were not something I checked regularly.
+
+The prompt took about ten seconds to type. The investigation took a few minutes to run. Recovering 3 GB of memory from a four-node Raspberry Pi cluster — where every gigabyte matters — took a total of three kubectl commands and one SSH kill invocation.
+
+The more interesting result is what it says about how I should be using these tools. Not just for building features and fixing bugs, but for the maintenance work that accumulates silently on any long-running system: the orphaned processes, the zombie resources, the things that are not quite broken but are not quite right either. The work that is easy to do and easy to neglect.
