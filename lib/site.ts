@@ -8,7 +8,7 @@ export const siteConfig = {
   linkedin: "https://linkedin.com/in/michael-delamorena/",
   email: "michael@michaeldelamorena.com",
   ogImage: "/og-default.png",
-  resumePdf: "/michael-delamorena-resume-2026-04.pdf",
+  resumePdf: "/resume.pdf",
   heroImage: "/hero-action-figure.jpg",
   tagline: "Platform Engineering · Reliability Architecture · Cloud Infrastructure",
 } as const;

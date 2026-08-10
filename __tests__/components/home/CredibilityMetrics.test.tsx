@@ -47,16 +47,16 @@ describe("CredibilityMetrics", () => {
       expect(screen.getByText("62%")).toBeInTheDocument();
     });
 
-    it("renders the '40+' Kubernetes clusters metric", () => {
-      expect(screen.getByText("40+")).toBeInTheDocument();
+    it("renders the '15 min' disaster recovery metric", () => {
+      expect(screen.getByText("15 min")).toBeInTheDocument();
     });
 
     it("renders the '20+' years software engineering metric", () => {
       expect(screen.getByText("20+")).toBeInTheDocument();
     });
 
-    it("renders the '10+' years cloud infrastructure metric", () => {
-      expect(screen.getByText("10+")).toBeInTheDocument();
+    it("renders the '$527K' AWS savings metric", () => {
+      expect(screen.getByText("$527K")).toBeInTheDocument();
     });
   });
 
@@ -65,8 +65,8 @@ describe("CredibilityMetrics", () => {
       expect(screen.getByText("AWS cost reduction achieved")).toBeInTheDocument();
     });
 
-    it("renders the Kubernetes clusters label", () => {
-      expect(screen.getByText("Kubernetes clusters governed")).toBeInTheDocument();
+    it("renders the disaster recovery label", () => {
+      expect(screen.getByText("Disaster recovery RTA achieved")).toBeInTheDocument();
     });
   });
 

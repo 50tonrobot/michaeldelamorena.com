@@ -1,0 +1,19 @@
+{{- if .Values.resumeVolume.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.resumeVolume.claimName }}
+  namespace: michaeldelamorena-com
+  labels:
+    {{- include "michaeldelamorena-com.labels" . | nindent 4 }}
+  annotations:
+    # Survive `helm uninstall` — this holds the live resume.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: {{ .Values.resumeVolume.size }}
+{{- end }}

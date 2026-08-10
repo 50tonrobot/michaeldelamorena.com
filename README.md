@@ -54,6 +54,10 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Updating the Resume
+
+Export the resume from Pages, then run `scripts/update-resume <file.pdf>`. The tool normalizes accessibility metadata and writes it to the Longhorn volume; no redeploy is needed. Served at `https://michaeldelamorena.com/resume.pdf`.
+
 ## Deployment
 
 ```bash

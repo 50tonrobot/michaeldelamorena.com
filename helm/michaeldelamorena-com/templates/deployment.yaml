@@ -49,6 +49,18 @@ spec:
             capabilities:
               drop:
                 - ALL
+          {{- if .Values.resumeVolume.enabled }}
+          volumeMounts:
+            - name: resume-content
+              mountPath: {{ .Values.resumeVolume.mountPath }}
+              readOnly: true
+          {{- end }}
+      {{- if .Values.resumeVolume.enabled }}
+      volumes:
+        - name: resume-content
+          persistentVolumeClaim:
+            claimName: {{ .Values.resumeVolume.claimName }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -6,6 +6,22 @@ const nextConfig: NextConfig = {
   images: {
     formats: ["image/avif", "image/webp"],
   },
+  async rewrites() {
+    return [
+      // Stable vanity URL → the Longhorn-backed file (served from public/documents in prod).
+      { source: "/resume.pdf", destination: "/documents/resume.pdf" },
+    ];
+  },
+  async redirects() {
+    return [
+      // Preserve the previous dated resume URL.
+      {
+        source: "/michael-delamorena-resume-2026-04.pdf",
+        destination: "/resume.pdf",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {
@@ -34,6 +50,13 @@ const nextConfig: NextConfig = {
         source: "/:file(favicon\\.ico|robots\\.txt|sitemap\\.xml|og-default\\.png|manifest\\.json|site\\.webmanifest)",
         headers: [
           { key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=3600" },
+        ],
+      },
+      {
+        // Resume PDF served from the mounted volume subdirectory — 24h.
+        source: "/documents/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=86400" },
         ],
       },
       {
