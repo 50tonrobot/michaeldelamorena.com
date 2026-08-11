@@ -52,3 +52,22 @@ kubectl exec -n "$NS" "$POD" -- python3 /usr/local/bin/patch_pdf.py /tmp/incomin
 kubectl exec -n "$NS" "$POD" -- sh -c 'chmod 0755 /mnt/documents && chmod 0644 /mnt/documents/resume.pdf'
 echo -n "on-volume checksum: "; kubectl exec -n "$NS" "$POD" -- md5sum /mnt/documents/resume.pdf
 echo "documents/resume.pdf updated on volume '$PVC'."
+
+# Purge the CDN so the new resume is served immediately (not after the ~24h TTL).
+# michaeldelamorena.com's own zone (the global CLOUDFLARE_ZONE_ID points elsewhere);
+# override with CLOUDFLARE_ZONE_ID_MDLM if it changes.
+CF_ZONE_ID="${CLOUDFLARE_ZONE_ID_MDLM:-REDACTED_CF_ZONE_ID}"
+if [ -n "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" ]; then
+  echo "Purging Cloudflare cache for the resume URLs..."
+  purge_resp=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache" \
+    -H "Authorization: Bearer ${CLOUDFLARE_CACHE_PURGE_TOKEN}" \
+    -H "Content-Type: application/json" \
+    --data '{"files":["https://michaeldelamorena.com/resume.pdf","https://michaeldelamorena.com/documents/resume.pdf"]}')
+  if echo "$purge_resp" | grep -q '"success":true'; then
+    echo "cache purged — new resume is live."
+  else
+    echo "WARNING: cache purge failed (new PDF may be cached up to ~24h): $purge_resp"
+  fi
+else
+  echo "NOTE: CLOUDFLARE_CACHE_PURGE_TOKEN not set — skipped cache purge (new PDF may be cached up to ~24h)."
+fi

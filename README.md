@@ -56,7 +56,9 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Updating the Resume
 
-Export the resume from Pages, then run `scripts/update-resume <file.pdf>`. The tool normalizes accessibility metadata and writes it to the Longhorn volume; no redeploy is needed. Served at `https://michaeldelamorena.com/resume.pdf`.
+Export the resume from Pages, then run `scripts/update-resume <file.pdf>`. The tool normalizes accessibility metadata, writes it to the Longhorn volume, and purges the Cloudflare cache so the new version is live immediately; no redeploy is needed. Served at `https://michaeldelamorena.com/resume.pdf`.
+
+> Cache purge requires `CLOUDFLARE_CACHE_PURGE_TOKEN` in your environment (a Zone → Cache Purge token for `michaeldelamorena.com`). Without it the upload still succeeds, but the new PDF may be cached at the edge for up to ~24h.
 
 ## Deployment
 
