@@ -101,12 +101,16 @@ echo "Tagged $NEW_TAG"
 echo ""
 echo "  Site: https://michaeldelamorena.com"
 
-# ─── Cloudflare cache purge (optional — requires CLOUDFLARE_CACHE_PURGE_TOKEN + CLOUDFLARE_ZONE_ID) ─
-if [[ -n "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" && -n "${CLOUDFLARE_ZONE_ID:-}" ]]; then
+# ─── Cloudflare cache purge (optional — requires CLOUDFLARE_CACHE_PURGE_TOKEN) ─
+# This site is the michaeldelamorena.com zone. The global CLOUDFLARE_ZONE_ID is
+# shared across projects and points at paydayvibes.com, so pin this project's own
+# zone here (override with CLOUDFLARE_ZONE_ID_MDLM if the zone ever changes).
+CF_ZONE_ID="${CLOUDFLARE_ZONE_ID_MDLM:-REDACTED_CF_ZONE_ID}"
+if [[ -n "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" ]]; then
   echo ""
-  echo "Purging Cloudflare cache..."
+  echo "Purging Cloudflare cache (zone ${CF_ZONE_ID})..."
   CF_RESPONSE=$(curl -s -X POST \
-    "https://api.cloudflare.com/client/v4/zones/${CLOUDFLARE_ZONE_ID}/purge_cache" \
+    "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache" \
     -H "Authorization: Bearer ${CLOUDFLARE_CACHE_PURGE_TOKEN}" \
     -H "Content-Type: application/json" \
     --data '{"purge_everything":true}')
@@ -114,10 +118,10 @@ if [[ -n "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" && -n "${CLOUDFLARE_ZONE_ID:-}" ]];
   if echo "$CF_RESPONSE" | grep -q '"success":true'; then
     echo "Cloudflare cache purged successfully"
   else
-    echo "Warning: Cloudflare cache purge failed or token not configured"
+    echo "Warning: Cloudflare cache purge failed"
     echo "$CF_RESPONSE"
   fi
 else
   echo ""
-  echo "Skipping Cloudflare cache purge (CLOUDFLARE_CACHE_PURGE_TOKEN / CLOUDFLARE_ZONE_ID not set)"
+  echo "Skipping Cloudflare cache purge (CLOUDFLARE_CACHE_PURGE_TOKEN not set)"
 fi
