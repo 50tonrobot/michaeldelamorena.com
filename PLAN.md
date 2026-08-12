@@ -542,7 +542,7 @@ The `a11y-auditor` agent runs automatically after all frontend work and must cle
 - [ ] 12. Verify sitemap at `https://michaeldelamorena.com/sitemap.xml`
 - [ ] 13. Submit sitemap to Google Search Console
 
-**Deployment stack:** Docker → `registry.example.internal` → Helm → k3s (aarch64) → Traefik ingress → cert-manager TLS → `michaeldelamorena.com`
+**Deployment stack:** Docker → private registry (`REGISTRY_DOMAIN`) → Helm → k3s (aarch64) → Traefik ingress → cert-manager TLS → `michaeldelamorena.com`
 
 **Note on GA Measurement ID:** `NEXT_PUBLIC_GA_MEASUREMENT_ID` is inlined at Next.js build time. It is passed as a Docker `--build-arg` (read from `.env.local` by `scripts/deploy`) and baked into the image. It does not need a Kubernetes Secret.
 

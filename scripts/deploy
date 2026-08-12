@@ -16,9 +16,11 @@ if [[ -z "$GA_ID" ]]; then
   exit 1
 fi
 
-# ─── Registry credentials (defaults match financialcalendar deploy script) ──
-REGISTRY_DOMAIN="${REGISTRY_DOMAIN:-registry.example.internal}"
-REGISTRY_USERNAME="${REGISTRY_USERNAME:-50tonrobot}"
+# ─── Registry credentials (provide via environment / ~/.zshrc) ──────────────
+# No hardcoded defaults: registry host and username are private infra details
+# and must come from the environment. See .env.example.
+: "${REGISTRY_DOMAIN:?set REGISTRY_DOMAIN (e.g. export it or add to ~/.zshrc)}"
+: "${REGISTRY_USERNAME:?set REGISTRY_USERNAME (e.g. export it or add to ~/.zshrc)}"
 
 # Load REGISTRY_PASSWORD from ~/.zshrc if not already in the environment
 if [[ -z "${REGISTRY_PASSWORD:-}" ]]; then
@@ -102,11 +104,13 @@ echo ""
 echo "  Site: https://michaeldelamorena.com"
 
 # ─── Cloudflare cache purge (optional — requires CLOUDFLARE_CACHE_PURGE_TOKEN) ─
-# This site is the michaeldelamorena.com zone. The global CLOUDFLARE_ZONE_ID is
-# shared across projects and points at paydayvibes.com, so pin this project's own
-# zone here (override with CLOUDFLARE_ZONE_ID_MDLM if the zone ever changes).
-CF_ZONE_ID="${CLOUDFLARE_ZONE_ID_MDLM:-REDACTED_CF_ZONE_ID}"
-if [[ -n "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" ]]; then
+# This site has its own Cloudflare zone. Provide its zone id via
+# CLOUDFLARE_ZONE_ID_MDLM (do NOT hardcode it — zone ids are private infra ids).
+CF_ZONE_ID="${CLOUDFLARE_ZONE_ID_MDLM:-}"
+if [[ -n "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" && -z "$CF_ZONE_ID" ]]; then
+  echo "Warning: CLOUDFLARE_CACHE_PURGE_TOKEN set but CLOUDFLARE_ZONE_ID_MDLM is not — skipping cache purge."
+fi
+if [[ -n "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" && -n "$CF_ZONE_ID" ]]; then
   echo ""
   echo "Purging Cloudflare cache (zone ${CF_ZONE_ID})..."
   CF_RESPONSE=$(curl -s -X POST \
@@ -121,7 +125,7 @@ if [[ -n "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" ]]; then
     echo "Warning: Cloudflare cache purge failed"
     echo "$CF_RESPONSE"
   fi
-else
+elif [[ -z "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" ]]; then
   echo ""
   echo "Skipping Cloudflare cache purge (CLOUDFLARE_CACHE_PURGE_TOKEN not set)"
 fi

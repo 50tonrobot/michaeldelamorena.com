@@ -54,10 +54,10 @@ echo -n "on-volume checksum: "; kubectl exec -n "$NS" "$POD" -- md5sum /mnt/docu
 echo "documents/resume.pdf updated on volume '$PVC'."
 
 # Purge the CDN so the new resume is served immediately (not after the ~24h TTL).
-# michaeldelamorena.com's own zone (the global CLOUDFLARE_ZONE_ID points elsewhere);
-# override with CLOUDFLARE_ZONE_ID_MDLM if it changes.
-CF_ZONE_ID="${CLOUDFLARE_ZONE_ID_MDLM:-REDACTED_CF_ZONE_ID}"
-if [ -n "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" ]; then
+# Provide this site's Cloudflare zone id via CLOUDFLARE_ZONE_ID_MDLM
+# (do NOT hardcode it — zone ids are private infra ids).
+CF_ZONE_ID="${CLOUDFLARE_ZONE_ID_MDLM:-}"
+if [ -n "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" ] && [ -n "$CF_ZONE_ID" ]; then
   echo "Purging Cloudflare cache for the resume URLs..."
   purge_resp=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache" \
     -H "Authorization: Bearer ${CLOUDFLARE_CACHE_PURGE_TOKEN}" \
@@ -69,5 +69,5 @@ if [ -n "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" ]; then
     echo "WARNING: cache purge failed (new PDF may be cached up to ~24h): $purge_resp"
   fi
 else
-  echo "NOTE: CLOUDFLARE_CACHE_PURGE_TOKEN not set — skipped cache purge (new PDF may be cached up to ~24h)."
+  echo "NOTE: set CLOUDFLARE_CACHE_PURGE_TOKEN and CLOUDFLARE_ZONE_ID_MDLM to auto-purge the CDN — skipped (new PDF may be cached up to ~24h)."
 fi

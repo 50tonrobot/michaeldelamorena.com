@@ -60,6 +60,27 @@ Current trusted origins:
 
 Every `<Link>` or `<a>` with `target="_blank"` must have `rel="noopener noreferrer"`. Also add `<span className="sr-only">(opens in new tab)</span>` for screen reader users.
 
+### 6. Private infrastructure identifiers — never hardcode; read from the environment
+
+**This repository is public.** No private infrastructure identifier may be committed as a literal — not in code, scripts, Helm values, docs, or MDX content. This includes:
+
+- **Cloudflare zone / account IDs** → read from `CLOUDFLARE_ZONE_ID_MDLM` (never a literal 32-hex fallback)
+- **Private container-registry hostnames** → read from `REGISTRY_DOMAIN` (the Helm `image.repository` default is a placeholder; the deploy script overrides it via `--set`)
+- **Registry usernames** → read from `REGISTRY_USERNAME` (no default in `scripts/deploy`)
+- **Internal IPs / VLANs / host addresses** (e.g. `192.168.x.x`) → redact from docs and blog content; use example ranges
+
+```bash
+# ✅ CORRECT — required from env, no literal fallback
+CF_ZONE_ID="${CLOUDFLARE_ZONE_ID_MDLM:-}"
+: "${REGISTRY_DOMAIN:?set REGISTRY_DOMAIN}"
+
+# ❌ WRONG — literal infra identifier baked into a public repo
+CF_ZONE_ID="${CLOUDFLARE_ZONE_ID_MDLM:-<real-32-hex-zone-id>}"
+REGISTRY_DOMAIN="${REGISTRY_DOMAIN:-<real-private-registry-host>}"
+```
+
+These are not credentials on their own, but publishing them discloses infrastructure and is treated as a leak. This is enforced at commit time by the **gitleaks pre-commit hook** (`.githooks/pre-commit` + `.gitleaks.toml`) — the hook is wired automatically via the `prepare` npm script (`git config core.hooksPath .githooks`). A verified false positive may be suppressed with `# gitleaks:allow` on the line, with a reason.
+
 ---
 
 ## semgrep
@@ -81,7 +102,7 @@ source ~/.zshrc   # ensure REGISTRY_DOMAIN, REGISTRY_USERNAME, REGISTRY_PASSWORD
 scripts/deploy
 ```
 
-The script auto-increments the patch version from the latest `v*` git tag, builds a `linux/arm64` Docker image, pushes to `registry.example.internal`, creates the git tag, and runs `helm upgrade --install`.
+The script auto-increments the patch version from the latest `v*` git tag, builds a `linux/arm64` Docker image, pushes to the private registry (`REGISTRY_DOMAIN`), creates the git tag, and runs `helm upgrade --install`.
 
 **Helm chart:** `helm/michaeldelamorena-com/` — namespace `michaeldelamorena-com`, 2 replicas, Traefik ingress, cert-manager TLS for `michaeldelamorena.com`.
 

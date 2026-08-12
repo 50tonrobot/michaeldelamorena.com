@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Pre-commit secret + infra-identifier scan.
+#
+# Blocks commits that introduce credentials or private infrastructure
+# identifiers (Cloudflare zone/account IDs, private registry hosts, internal
+# IPs). Rules live in .gitleaks.toml (default gitleaks ruleset + custom rules).
+#
+# This repo is PUBLIC — a leaked secret is exposed the moment it is pushed.
+# Bypass only with a documented reason: git commit --no-verify
+set -euo pipefail
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "⚠  gitleaks not installed — secret scan skipped."
+  echo "   Install it before committing: brew install gitleaks"
+  exit 0
+fi
+
+if ! gitleaks git --staged --redact --no-banner; then
+  echo ""
+  echo "✖  gitleaks flagged a potential secret or private infra identifier in your staged changes."
+  echo "   • If it is a real secret/identifier: remove it and read it from the environment instead."
+  echo "   • If it is a verified false positive: append '# gitleaks:allow' to that line, or add an"
+  echo "     allowlist entry in .gitleaks.toml, and note why."
+  echo "   • To bypass intentionally (rare, with justification): git commit --no-verify"
+  exit 1
+fi

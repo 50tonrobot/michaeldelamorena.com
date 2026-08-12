@@ -1,0 +1,36 @@
+# gitleaks config for michaeldelamorena.com (PUBLIC repo).
+# Extends the built-in ruleset (API keys, tokens, private keys, etc.) with
+# custom rules for the private *infrastructure identifiers* that must never be
+# committed to a public repo, even though they are not credentials on their own.
+#
+# Scanned on every commit by .githooks/pre-commit (gitleaks git --staged).
+
+title = "michaeldelamorena.com secret + infra-identifier scan"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "cloudflare-zone-or-account-id"
+description = "Cloudflare zone/account ID (32-char hex) assigned inline — read it from the environment (CLOUDFLARE_ZONE_ID_MDLM) instead of hardcoding."
+regex = '''(?i)(?:cloudflare|zone)[a-z0-9_\-]*['":= \-]{1,4}([a-f0-9]{32})\b'''
+keywords = ["zone", "cloudflare", "account"]
+
+[[rules]]
+id = "private-registry-host"
+description = "Private container-registry hostname committed inline — provide it via REGISTRY_DOMAIN instead."
+regex = '''\b(?:my-registry\.local|registry\.[a-z0-9-]+\.(?:local|internal))\b'''
+keywords = ["registry"]
+
+[[rules]]
+id = "private-ipv4-home-lan"
+description = "Private 10.10.0.0/16 address — internal network topology should not be published."
+regex = '''\b192\.168\.\d{1,3}\.\d{1,3}\b'''
+
+[allowlist]
+description = "Documentation/example placeholders that are intentionally committed."
+regexes = [
+  '''your-registry\.example''',
+  '''registry\.example\.internal''',
+  '''G-XXXXXXXXXX''',
+]

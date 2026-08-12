@@ -1,7 +1,9 @@
 replicaCount: 1
 
 image:
-  repository: registry.example.internal/michaeldelamorena-com
+  # Placeholder — the deploy script overrides this with --set image.repository=<host>/...
+  # Do not commit a real private registry host here.
+  repository: your-registry.example/michaeldelamorena-com
   tag: "1.0.0"
   pullPolicy: Always
 

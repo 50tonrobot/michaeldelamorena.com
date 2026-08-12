@@ -11,7 +11,7 @@ Personal portfolio and blog. Built with Next.js 16 App Router, deployed to a sel
 | Styling | Tailwind CSS 4 |
 | Content | MDX files via `next-mdx-remote` |
 | Runtime | Node.js (standalone Docker image) |
-| Container registry | Private registry at `registry.example.internal` |
+| Container registry | Private registry (host provided via `REGISTRY_DOMAIN`) |
 | Orchestration | k3s (Kubernetes) on Raspberry Pi nodes |
 | Ingress | Traefik with cert-manager / Let's Encrypt |
 | WAF | OWASP ModSecurity CRS (inspector mode) |
@@ -68,22 +68,24 @@ scripts/deploy
 
 The script:
 1. Reads `NEXT_PUBLIC_GA_MEASUREMENT_ID` from `.env.local`
-2. Loads registry credentials from the environment (defaults: `REGISTRY_DOMAIN=registry.example.internal`, `REGISTRY_USERNAME=50tonrobot`; auto-sources `REGISTRY_PASSWORD` from `~/.zshrc` if not exported)
+2. Loads registry credentials from the environment (`REGISTRY_DOMAIN`, `REGISTRY_USERNAME`, `REGISTRY_PASSWORD` — export them or add to `~/.zshrc`; no defaults are baked into the script)
 3. Bumps the patch version from the latest `v*` git tag
 4. Builds a `linux/arm64` Docker image with the GA ID baked in at build time
 5. Pushes `<image>:<version>` and `<image>:latest` to the private registry
 6. Creates a git tag
 7. Runs `helm upgrade --install` into the `michaeldelamorena-com` namespace
-8. Purges the Cloudflare edge cache (if `CLOUDFLARE_CACHE_PURGE_TOKEN` and `CLOUDFLARE_ZONE_ID` are set)
+8. Purges the Cloudflare edge cache (if `CLOUDFLARE_CACHE_PURGE_TOKEN` and `CLOUDFLARE_ZONE_ID_MDLM` are set)
 
 **Versioning:** patch = bug fix, minor = new feature, major = breaking change. The script auto-increments patch. For minor/major, tag manually (`git tag v1.x.0`) before running.
 
 **Required environment variables** (export or add to `~/.zshrc`):
 
 ```bash
+REGISTRY_DOMAIN=...                # private container registry host
+REGISTRY_USERNAME=...
 REGISTRY_PASSWORD=...
 CLOUDFLARE_CACHE_PURGE_TOKEN=...   # Zone.Cache Purge token scoped to michaeldelamorena.com
-CLOUDFLARE_ZONE_ID=REDACTED_CF_ZONE_ID
+CLOUDFLARE_ZONE_ID_MDLM=...        # this site's Cloudflare zone id (never commit the real value)
 ```
 
 See `.env.example` for the full list.

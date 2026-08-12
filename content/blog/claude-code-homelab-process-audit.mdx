@@ -17,7 +17,7 @@ What followed was a methodical infrastructure audit across five hosts — the Ra
 
 Before touching a single host, Claude Code read the infrastructure documentation. My homelab architecture is captured in a markdown file that covers network topology, SSH access patterns, the two-VLAN setup (home LAN and server VLAN), Tailscale configuration, and the full service inventory. Starting there meant the investigation had the right mental model before issuing a single command.
 
-The first attempt at reaching the k3s nodes failed with connection timeouts — expected, since the server VLAN at `10.10.0.0/24` is not directly accessible from my development machine. Rather than stopping to ask, Claude Code recognized that the Pi-hole at `10.10.1.2` sits on both VLANs and used it as a ProxyJump to reach all four cluster nodes. All five `ps aux` calls were issued in parallel, collecting process snapshots from every host in a single round.
+The first attempt at reaching the k3s nodes failed with connection timeouts — expected, since the server VLAN is not directly accessible from my development machine. Rather than stopping to ask, Claude Code recognized that the Pi-hole sits on both VLANs and used it as a ProxyJump to reach all four cluster nodes. All five `ps aux` calls were issued in parallel, collecting process snapshots from every host in a single round.
 
 That is a small thing, but it matters. The investigation did not serialize across hosts. It gathered the full picture at once, then reasoned across it.
 
