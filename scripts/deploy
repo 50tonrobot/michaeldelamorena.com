@@ -104,28 +104,39 @@ echo ""
 echo "  Site: https://michaeldelamorena.com"
 
 # ─── Cloudflare cache purge (optional — requires CLOUDFLARE_CACHE_PURGE_TOKEN) ─
-# This site has its own Cloudflare zone. Provide its zone id via
-# CLOUDFLARE_ZONE_ID_MDLM (do NOT hardcode it — zone ids are private infra ids).
-CF_ZONE_ID="${CLOUDFLARE_ZONE_ID_MDLM:-}"
-if [[ -n "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" && -z "$CF_ZONE_ID" ]]; then
-  echo "Warning: CLOUDFLARE_CACHE_PURGE_TOKEN set but CLOUDFLARE_ZONE_ID_MDLM is not — skipping cache purge."
-fi
-if [[ -n "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" && -n "$CF_ZONE_ID" ]]; then
-  echo ""
-  echo "Purging Cloudflare cache (zone ${CF_ZONE_ID})..."
-  CF_RESPONSE=$(curl -s -X POST \
-    "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache" \
-    -H "Authorization: Bearer ${CLOUDFLARE_CACHE_PURGE_TOKEN}" \
-    -H "Content-Type: application/json" \
-    --data '{"purge_everything":true}')
-
-  if echo "$CF_RESPONSE" | grep -q '"success":true'; then
-    echo "Cloudflare cache purged successfully"
-  else
-    echo "Warning: Cloudflare cache purge failed"
-    echo "$CF_RESPONSE"
+# This site has its own Cloudflare zone. CLOUDFLARE_ZONE_ID_MDLM is an OPTIONAL
+# override (do NOT hardcode it — zone ids are private infra ids); if unset, the
+# zone id is resolved at runtime from the public domain name.
+if [[ -n "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" ]]; then
+  CF_ZONE_ID="${CLOUDFLARE_ZONE_ID_MDLM:-}"
+  if [[ -z "$CF_ZONE_ID" ]]; then
+    CF_ZONE_LOOKUP=$(curl -s -X GET \
+      "https://api.cloudflare.com/client/v4/zones?name=michaeldelamorena.com" \
+      -H "Authorization: Bearer ${CLOUDFLARE_CACHE_PURGE_TOKEN}" \
+      -H "Content-Type: application/json") || CF_ZONE_LOOKUP=""
+    CF_ZONE_ID=$(echo "$CF_ZONE_LOOKUP" | jq -r '.result[0].id // empty' 2>/dev/null || true)
   fi
-elif [[ -z "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" ]]; then
+
+  if [[ -z "$CF_ZONE_ID" ]]; then
+    echo ""
+    echo "Warning: could not resolve Cloudflare zone id for michaeldelamorena.com — skipping cache purge."
+  else
+    echo ""
+    echo "Purging Cloudflare cache (zone ${CF_ZONE_ID})..."
+    CF_RESPONSE=$(curl -s -X POST \
+      "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache" \
+      -H "Authorization: Bearer ${CLOUDFLARE_CACHE_PURGE_TOKEN}" \
+      -H "Content-Type: application/json" \
+      --data '{"purge_everything":true}')
+
+    if echo "$CF_RESPONSE" | grep -q '"success":true'; then
+      echo "Cloudflare cache purged successfully"
+    else
+      echo "Warning: Cloudflare cache purge failed"
+      echo "$CF_RESPONSE"
+    fi
+  fi
+else
   echo ""
   echo "Skipping Cloudflare cache purge (CLOUDFLARE_CACHE_PURGE_TOKEN not set)"
 fi

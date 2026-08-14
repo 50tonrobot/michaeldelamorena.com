@@ -54,20 +54,32 @@ echo -n "on-volume checksum: "; kubectl exec -n "$NS" "$POD" -- md5sum /mnt/docu
 echo "documents/resume.pdf updated on volume '$PVC'."
 
 # Purge the CDN so the new resume is served immediately (not after the ~24h TTL).
-# Provide this site's Cloudflare zone id via CLOUDFLARE_ZONE_ID_MDLM
-# (do NOT hardcode it — zone ids are private infra ids).
-CF_ZONE_ID="${CLOUDFLARE_ZONE_ID_MDLM:-}"
-if [ -n "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" ] && [ -n "$CF_ZONE_ID" ]; then
-  echo "Purging Cloudflare cache for the resume URLs..."
-  purge_resp=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache" \
-    -H "Authorization: Bearer ${CLOUDFLARE_CACHE_PURGE_TOKEN}" \
-    -H "Content-Type: application/json" \
-    --data '{"files":["https://michaeldelamorena.com/resume.pdf","https://michaeldelamorena.com/documents/resume.pdf"]}')
-  if echo "$purge_resp" | grep -q '"success":true'; then
-    echo "cache purged — new resume is live."
+# CLOUDFLARE_ZONE_ID_MDLM is an OPTIONAL override (do NOT hardcode it — zone ids
+# are private infra ids); if unset, the zone id is resolved at runtime from the
+# public domain name.
+if [ -n "${CLOUDFLARE_CACHE_PURGE_TOKEN:-}" ]; then
+  cf_zone_id="${CLOUDFLARE_ZONE_ID_MDLM:-}"
+  if [ -z "$cf_zone_id" ]; then
+    cf_zone_lookup=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=michaeldelamorena.com" \
+      -H "Authorization: Bearer ${CLOUDFLARE_CACHE_PURGE_TOKEN}" \
+      -H "Content-Type: application/json") || cf_zone_lookup=""
+    cf_zone_id=$(echo "$cf_zone_lookup" | grep -o '"id":"[^"]*"' | head -1 | sed -E 's/"id":"([^"]*)"/\1/') || cf_zone_id=""
+  fi
+
+  if [ -z "$cf_zone_id" ]; then
+    echo "WARNING: could not resolve Cloudflare zone id for michaeldelamorena.com — cache purge skipped (new PDF may be cached up to ~24h)."
   else
-    echo "WARNING: cache purge failed (new PDF may be cached up to ~24h): $purge_resp"
+    echo "Purging Cloudflare cache for the resume URLs (zone ${cf_zone_id})..."
+    purge_resp=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${cf_zone_id}/purge_cache" \
+      -H "Authorization: Bearer ${CLOUDFLARE_CACHE_PURGE_TOKEN}" \
+      -H "Content-Type: application/json" \
+      --data '{"files":["https://michaeldelamorena.com/resume.pdf","https://michaeldelamorena.com/documents/resume.pdf"]}')
+    if echo "$purge_resp" | grep -q '"success":true'; then
+      echo "cache purged — new resume is live."
+    else
+      echo "WARNING: cache purge failed (new PDF may be cached up to ~24h): $purge_resp"
+    fi
   fi
 else
-  echo "NOTE: set CLOUDFLARE_CACHE_PURGE_TOKEN and CLOUDFLARE_ZONE_ID_MDLM to auto-purge the CDN — skipped (new PDF may be cached up to ~24h)."
+  echo "NOTE: set CLOUDFLARE_CACHE_PURGE_TOKEN to auto-purge the CDN — skipped (new PDF may be cached up to ~24h)."
 fi
