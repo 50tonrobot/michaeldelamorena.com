@@ -1,7 +1,9 @@
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
+import { load as loadYaml } from "js-yaml";
 import readingTime from "reading-time";
+import type { GrayMatterFile } from "gray-matter";
 import type {
   BlogPost,
   BlogFrontmatter,
@@ -10,6 +12,23 @@ import type {
 } from "@/types/content";
 
 const contentDir = path.join(process.cwd(), "content");
+
+/**
+ * gray-matter@4 bundles js-yaml@3 internally and calls the removed
+ * `yaml.safeLoad` API when paired with js-yaml@4+ (forced here via a
+ * package.json `overrides` entry to remediate a supply-chain CVE).
+ * Supplying `load` — safe by default in js-yaml@4 — as gray-matter's YAML
+ * engine keeps frontmatter parsing working without an upstream gray-matter
+ * release.
+ *
+ * @param raw - Raw MDX file contents including frontmatter block
+ * @returns Parsed gray-matter file with `data` and `content`
+ */
+function parseFrontmatter(raw: string): GrayMatterFile<string> {
+  return matter(raw, {
+    engines: { yaml: (input: string) => loadYaml(input) as object },
+  });
+}
 
 function isValidSlug(slug: string): boolean {
   return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug);
@@ -73,7 +92,7 @@ export function getAllBlogPosts(): BlogPost[] {
       if (!filePath) return null;
       const slug = filename.replace(/\.mdx$/, "");
       const raw = fs.readFileSync(filePath, "utf-8");
-      const { data, content } = matter(raw);
+      const { data, content } = parseFrontmatter(raw);
       const frontmatter = normalizeBlogFrontmatter(data);
       const stats = readingTime(content);
 
@@ -99,7 +118,7 @@ export function getBlogPostRaw(
   if (!filePath || !fs.existsSync(filePath)) return null;
 
   const raw = fs.readFileSync(filePath, "utf-8");
-  const { data, content } = matter(raw);
+  const { data, content } = parseFrontmatter(raw);
 
   return { content, frontmatter: normalizeBlogFrontmatter(data) };
 }
@@ -116,7 +135,7 @@ export function getAllProjects(): Project[] {
       if (!filePath) return null;
       const slug = filename.replace(/\.mdx$/, "");
       const raw = fs.readFileSync(filePath, "utf-8");
-      const { data } = matter(raw);
+      const { data } = parseFrontmatter(raw);
       const frontmatter = normalizeProjectFrontmatter(data);
 
       return { slug, frontmatter };
@@ -133,7 +152,7 @@ export function getProjectRaw(
   if (!filePath || !fs.existsSync(filePath)) return null;
 
   const raw = fs.readFileSync(filePath, "utf-8");
-  const { data, content } = matter(raw);
+  const { data, content } = parseFrontmatter(raw);
 
   return { content, frontmatter: normalizeProjectFrontmatter(data) };
 }

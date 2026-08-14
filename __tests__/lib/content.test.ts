@@ -170,6 +170,51 @@ describe("getBlogPostRaw", () => {
     expect(result!.frontmatter.title).toBe("My Post");
     expect(result!.content).toContain("The body content.");
   });
+
+  // Regression coverage for the parseFrontmatter() helper in lib/content.ts,
+  // which supplies js-yaml@4's `load()` as gray-matter's YAML engine (gray-matter's
+  // bundled js-yaml@3 `safeLoad` is unavailable once js-yaml is forced to v4 via
+  // the package.json `overrides` CVE remediation).
+  it("parses real-world YAML frontmatter (quoted strings, arrays, booleans) via the js-yaml v4 engine", () => {
+    mockedFs.existsSync.mockReturnValue(true);
+    mockedFs.readFileSync.mockReturnValue(
+      `---
+title: "A Post: With a Colon"
+description: 'Single-quoted description'
+date: "2025-07-04"
+tags: ["typescript", "next.js", "security"]
+featured: true
+draft: false
+---
+
+## Heading
+
+Some **markdown** body content with a [link](https://example.com).
+`
+    );
+
+    const result = getBlogPostRaw("real-world-post");
+
+    expect(result).not.toBeNull();
+    expect(result!.frontmatter).toEqual({
+      title: "A Post: With a Colon",
+      description: "Single-quoted description",
+      date: "2025-07-04",
+      tags: ["typescript", "next.js", "security"],
+      featured: true,
+      draft: false,
+    });
+    expect(result!.content).toContain("Some **markdown** body content");
+  });
+
+  it("throws when frontmatter contains malformed YAML", () => {
+    mockedFs.existsSync.mockReturnValue(true);
+    mockedFs.readFileSync.mockReturnValue(
+      '---\ntitle: "Unclosed quote\n  bad: [1,2\n---\nBody.'
+    );
+
+    expect(() => getBlogPostRaw("malformed-post")).toThrow();
+  });
 });
 
 // ─── getAllProjects ───────────────────────────────────────────────────────────
@@ -285,5 +330,14 @@ describe("getProjectRaw", () => {
     expect(result).not.toBeNull();
     expect(result!.frontmatter.title).toBe("My Project");
     expect(result!.content).toContain("Project body.");
+  });
+
+  it("throws when project frontmatter contains malformed YAML", () => {
+    mockedFs.existsSync.mockReturnValue(true);
+    mockedFs.readFileSync.mockReturnValue(
+      '---\ntitle: "Unclosed quote\n  bad: [1,2\n---\nBody.'
+    );
+
+    expect(() => getProjectRaw("malformed-project")).toThrow();
   });
 });
