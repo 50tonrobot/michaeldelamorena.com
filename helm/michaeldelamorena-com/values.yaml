@@ -5,6 +5,9 @@ image:
   # Do not commit a real private registry host here.
   repository: your-registry.example/michaeldelamorena-com
   tag: "1.0.0"
+  # When set (e.g. "sha256:abc..."), the deployment pins repository@digest and
+  # ignores tag. Leave empty to deploy by tag (default).
+  digest: ""
   pullPolicy: Always
 
 nameOverride: ""
